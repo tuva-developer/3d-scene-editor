@@ -12,7 +12,6 @@ export const TransformToolbar = ({ mode, onChange, showTiles, onToggleTiles, sho
   return (
     <div className="tc-toolbar">
       <div className="tc-group">
-        <div className="tc-label">Transform</div>
         <div className="tc-row">
           <button
             className={`tc-btn ${mode === "translate" ? "active" : ""}`}
@@ -47,7 +46,6 @@ export const TransformToolbar = ({ mode, onChange, showTiles, onToggleTiles, sho
       </div>
       <div className="tc-divider" />
       <div className="tc-group">
-        <div className="tc-label">Actions</div>
         <div className="tc-row">
           <button
             className={`tc-btn ${showTiles ? "active" : ""}`}
