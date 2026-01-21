@@ -6,7 +6,7 @@ import type { MapViewHandle } from "./components/map/MapView";
 
 function App() {
   const [mode, setMode] = useState<TransformMode>("translate");
-  const [showTiles, setShowTiles] = useState<boolean>(true);
+  const [showTiles, setShowTiles] = useState<boolean>(false);
   const [hasSelection, setHasSelection] = useState<boolean>(false);
   const [hasChanges, setHasChanges] = useState<boolean>(false);
   const mapHandleRef = useRef<MapViewHandle>(null);
