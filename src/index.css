@@ -1,0 +1,165 @@
+@import "maplibre-gl/dist/maplibre-gl.css";
+
+:root {
+  color-scheme: light;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  background: #f3f2ef;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+.App {
+  position: relative;
+  height: 100%;
+}
+
+.map-container {
+  position: absolute;
+  inset: 0;
+}
+
+.tc-toolbar {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(17, 22, 25, 0.82);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(8px);
+  align-items: center;
+}
+
+.tc-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tc-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(242, 244, 245, 0.7);
+}
+
+.tc-row {
+  display: flex;
+  gap: 6px;
+}
+
+.tc-row .tc-btn {
+  position: relative;
+}
+
+.tc-row .tc-btn + .tc-btn::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: 8px;
+  bottom: 8px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.tc-divider {
+  width: 1px;
+  height: 44px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.tc-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f2f4f5;
+  cursor: pointer;
+  font-size: 15px;
+  display: grid;
+  place-items: center;
+  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.tc-btn:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.tc-btn.active {
+  background: #f4b458;
+  color: #1c1410;
+  border-color: #f4b458;
+}
+
+.tc-btn-danger {
+  background: rgba(233, 76, 61, 0.85);
+  border-color: rgba(233, 76, 61, 0.95);
+  color: #1c0d0a;
+}
+
+.tc-btn-danger:hover {
+  background: rgba(233, 76, 61, 1);
+}
+
+.maplibregl-ctrl-top-right {
+  top: 16px;
+  right: 16px;
+}
+
+.maplibregl-ctrl-group {
+  background: rgba(17, 22, 25, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
+  border-radius: 12px;
+  overflow: hidden;
+  backdrop-filter: blur(8px);
+}
+
+.maplibregl-ctrl-group button {
+  width: 36px;
+  height: 36px;
+  color: #f2f4f5;
+  background: transparent;
+}
+
+.maplibregl-ctrl-group button:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.maplibregl-ctrl-group .maplibregl-ctrl-icon {
+  filter: invert(1) brightness(1.2);
+}
+
+.maplibregl-ctrl-group button:disabled .maplibregl-ctrl-icon {
+  opacity: 0.4;
+}
+
+.maplibregl-ctrl-group button:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 1px rgba(244, 180, 88, 0.8);
+}
+
+.maplibregl-ctrl-group button + button {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.maplibregl-ctrl-scale {
+  color: #f2f4f5;
+  background: rgba(17, 22, 25, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
+  border-radius: 10px;
+  padding: 6px 8px;
+  backdrop-filter: blur(8px);
+}
