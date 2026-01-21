@@ -4,6 +4,7 @@ import { MaplibreTransformControls } from "../controls/MaplibreTransformControls
 import type { HoverParameter } from "../controls/MaplibreTransformControls";
 import { decomposeObject } from "../data/models/objModel";
 import type { TransformControlsMode } from "three/examples/jsm/controls/TransformControls.js";
+import type { TransformMode } from "../../toolbar/TransformToolbar";
 import { tileLocalToLatLon, getMetersPerExtentUnit } from "../data/convert/coords";
 import * as THREE from "three";
 
@@ -32,6 +33,10 @@ export class OverlayLayer implements CustomLayerInterface {
   private applyGlobeMatrix = false;
   private currentTile: OverscaledTileID | null = null;
   private currentObject: THREE.Object3D | null = null;
+  private boxGroup: THREE.Group | null = null;
+  private boxSolid: THREE.LineSegments | null = null;
+  private boxPickMesh: THREE.Mesh | null = null;
+  private useBoxTranslate = false;
   private hoverDiv: HTMLDivElement | null = null;
   private onTransformChange?: (dirty: boolean) => void;
   private isDirty = false;
@@ -53,6 +58,7 @@ export class OverlayLayer implements CustomLayerInterface {
     this.currentTile = null;
     this.currentObject = null;
     this.setDirty(false);
+    this.clearBoxHelper();
     const gizmo = this.scene.getObjectByName("TransformControls");
     if (gizmo) {
       this.scene.remove(gizmo);
@@ -69,6 +75,7 @@ export class OverlayLayer implements CustomLayerInterface {
     obj.quaternion.copy(this.objectTransformSnapshot.quaternion);
     obj.updateMatrix();
     obj.updateMatrixWorld(true);
+    this.updateBoxHelper();
     this.map?.triggerRepaint();
     this.setDirty(false);
   }
@@ -132,7 +139,7 @@ export class OverlayLayer implements CustomLayerInterface {
     });
   }
 
-  attachGizmoToObject(object: THREE.Object3D, mode: TransformControlsMode = "translate"): void {
+  attachGizmoToObject(object: THREE.Object3D, mode: TransformMode = "translate"): void {
     if (!this.currentTile || !this.renderer || !this.camera || !this.scene || !this.map) {
       return;
     }
@@ -167,17 +174,28 @@ export class OverlayLayer implements CustomLayerInterface {
       scale: object.scale.clone(),
       quaternion: object.quaternion.clone(),
     };
-    if (mode === "rotate") {
+    const controlMode: TransformControlsMode = mode === "translate-box" ? "translate" : mode;
+    if (controlMode === "rotate") {
       this.transformControl.showX = false;
       this.transformControl.showY = false;
       this.transformControl.showZ = true;
+    } else if (mode === "translate-box") {
+      this.transformControl.showX = false;
+      this.transformControl.showY = false;
+      this.transformControl.showZ = false;
+      (this.transformControl as unknown as THREE.Object3D).visible = false;
+    } else {
+      this.transformControl.showX = true;
+      this.transformControl.showY = true;
+      this.transformControl.showZ = true;
+      (this.transformControl as unknown as THREE.Object3D).visible = true;
     }
-    this.transformControl.setMode(mode);
-    (this.transformControl as unknown as THREE.Object3D).visible = true;
+    this.transformControl.setMode(controlMode);
     (this.transformControl as unknown as THREE.Object3D).name = "TransformControls";
     this.transformControl.setCurrentTile(this.currentTile);
     this.transformControl.addEventListener("objectChange", this.handleObjectChange);
     this.scene.add(this.transformControl as unknown as THREE.Object3D);
+    this.setBoxTranslateMode(mode === "translate-box");
     this.setDirty(false);
 
     this.transformControl.onHover = (parameter: HoverParameter): void => {
@@ -188,19 +206,30 @@ export class OverlayLayer implements CustomLayerInterface {
     };
   }
 
-  setMode(mode: TransformControlsMode): void {
+  setMode(mode: TransformMode): void {
     if (!this.transformControl) {
       return;
     }
-    this.transformControl.setMode(mode);
-    if (mode === "rotate") {
+    const controlMode: TransformControlsMode = mode === "translate-box" ? "translate" : mode;
+    this.useBoxTranslate = mode === "translate-box";
+    this.transformControl.setMode(controlMode);
+    if (controlMode === "rotate") {
       this.transformControl.showX = false;
       this.transformControl.showY = false;
+      this.transformControl.showZ = true;
+      (this.transformControl as unknown as THREE.Object3D).visible = true;
+    } else if (mode === "translate-box") {
+      this.transformControl.showX = false;
+      this.transformControl.showY = false;
+      this.transformControl.showZ = false;
+      (this.transformControl as unknown as THREE.Object3D).visible = false;
     } else {
       this.transformControl.showX = true;
       this.transformControl.showY = true;
       this.transformControl.showZ = true;
+      (this.transformControl as unknown as THREE.Object3D).visible = true;
     }
+    this.setBoxTranslateMode(mode === "translate-box");
     this.map?.triggerRepaint();
   }
 
@@ -235,6 +264,7 @@ export class OverlayLayer implements CustomLayerInterface {
     if (this.transformControl) {
       this.transformControl.removeEventListener("objectChange", this.handleObjectChange);
     }
+    this.clearBoxHelper();
     this.renderer?.dispose();
     this.scene = null;
     this.renderer = null;
@@ -268,6 +298,7 @@ export class OverlayLayer implements CustomLayerInterface {
 
   private handleObjectChange = (): void => {
     this.updateDirtyState();
+    this.updateBoxHelper();
   };
 
   private updateDirtyState(): void {
@@ -291,5 +322,141 @@ export class OverlayLayer implements CustomLayerInterface {
     }
     this.isDirty = nextDirty;
     this.onTransformChange?.(nextDirty);
+  }
+
+  private setBoxTranslateMode(enabled: boolean): void {
+    this.useBoxTranslate = enabled;
+    if (!this.transformControl) {
+      return;
+    }
+    if (enabled) {
+      this.ensureBoxHelper();
+      this.transformControl.setBoxTranslateMode(true, this.boxPickMesh);
+    } else {
+      this.transformControl.setBoxTranslateMode(false, null);
+      this.clearBoxHelper();
+    }
+  }
+
+  private ensureBoxHelper(): void {
+    if (!this.scene || !this.currentObject) {
+      return;
+    }
+    if (!this.boxGroup) {
+      const boxColor = 0x00e5ff;
+      const solidMaterial = new THREE.LineBasicMaterial({ color: boxColor, linewidth: 2 });
+      this.boxSolid = new THREE.LineSegments(new THREE.BufferGeometry(), solidMaterial);
+      this.boxSolid.name = "TransformBoxSolid";
+      this.boxGroup = new THREE.Group();
+      this.boxGroup.name = "TransformBoxGroup";
+      this.boxGroup.add(this.boxSolid);
+      this.scene.add(this.boxGroup);
+    }
+    if (!this.boxPickMesh) {
+      const { geometry, center } = this.createBoxGeometry(this.currentObject);
+      const material = new THREE.MeshBasicMaterial({
+        color: 0xff7a00,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+      });
+      this.boxPickMesh = new THREE.Mesh(geometry, material);
+      this.boxPickMesh.position.copy(center);
+      this.boxPickMesh.name = "TransformBoxPick";
+      this.scene.add(this.boxPickMesh);
+    }
+    this.updateBoxHelper();
+  }
+
+  private updateBoxHelper(): void {
+    if (!this.useBoxTranslate || !this.currentObject) {
+      return;
+    }
+    if (this.boxSolid) {
+      const geometry = this.createBoxLineGeometry(this.currentObject);
+      this.boxSolid.geometry.dispose();
+      this.boxSolid.geometry = geometry;
+    }
+    if (this.boxPickMesh) {
+      const { geometry, center } = this.createBoxGeometry(this.currentObject);
+      this.boxPickMesh.geometry.dispose();
+      this.boxPickMesh.geometry = geometry;
+      this.boxPickMesh.position.copy(center);
+      this.boxPickMesh.updateMatrixWorld(true);
+    }
+  }
+
+  private clearBoxHelper(): void {
+    if (!this.scene) {
+      return;
+    }
+    if (this.boxGroup) {
+      if (this.boxSolid) {
+        this.boxSolid.geometry.dispose();
+        (this.boxSolid.material as THREE.Material).dispose();
+      }
+      this.scene.remove(this.boxGroup);
+      this.boxGroup = null;
+      this.boxSolid = null;
+    }
+    if (this.boxPickMesh) {
+      this.scene.remove(this.boxPickMesh);
+      this.boxPickMesh.geometry.dispose();
+      if (Array.isArray(this.boxPickMesh.material)) {
+        this.boxPickMesh.material.forEach((material) => material.dispose());
+      } else {
+        this.boxPickMesh.material.dispose();
+      }
+      this.boxPickMesh = null;
+    }
+  }
+
+  private createBoxGeometry(object: THREE.Object3D): { geometry: THREE.BoxGeometry; center: THREE.Vector3 } {
+    const box3 = new THREE.Box3().setFromObject(object);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box3.getSize(size);
+    box3.getCenter(center);
+    const geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+    return { geometry, center };
+  }
+
+  private createBoxLineGeometry(object: THREE.Object3D): THREE.BufferGeometry {
+    const box3 = new THREE.Box3().setFromObject(object);
+    const min = box3.min;
+    const max = box3.max;
+    const corners = [
+      new THREE.Vector3(min.x, min.y, min.z),
+      new THREE.Vector3(max.x, min.y, min.z),
+      new THREE.Vector3(max.x, max.y, min.z),
+      new THREE.Vector3(min.x, max.y, min.z),
+      new THREE.Vector3(min.x, min.y, max.z),
+      new THREE.Vector3(max.x, min.y, max.z),
+      new THREE.Vector3(max.x, max.y, max.z),
+      new THREE.Vector3(min.x, max.y, max.z),
+    ];
+    const edges: [number, number][] = [
+      [0, 1],
+      [1, 2],
+      [2, 3],
+      [3, 0],
+      [4, 5],
+      [5, 6],
+      [6, 7],
+      [7, 4],
+      [0, 4],
+      [1, 5],
+      [2, 6],
+      [3, 7],
+    ];
+    const solidPositions: number[] = [];
+    for (const [startIndex, endIndex] of edges) {
+      const start = corners[startIndex];
+      const end = corners[endIndex];
+      solidPositions.push(start.x, start.y, start.z, end.x, end.y, end.z);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(solidPositions, 3));
+    return geometry;
   }
 }

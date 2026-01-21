@@ -1,4 +1,4 @@
-export type TransformMode = "translate" | "rotate" | "scale" | "reset";
+export type TransformMode = "translate" | "translate-box" | "rotate" | "scale" | "reset";
 
 interface Props {
   mode: TransformMode;
@@ -20,6 +20,14 @@ export const TransformToolbar = ({ mode, onChange, showTiles, onToggleTiles, sho
             aria-label="Move"
           >
             <i className="fa-solid fa-up-down-left-right" />
+          </button>
+          <button
+            className={`tc-btn ${mode === "translate-box" ? "active" : ""}`}
+            onClick={() => onChange("translate-box")}
+            title="Box Move"
+            aria-label="Box Move"
+          >
+            <i className="fa-solid fa-vector-square" />
           </button>
           <button
             className={`tc-btn ${mode === "rotate" ? "active" : ""}`}

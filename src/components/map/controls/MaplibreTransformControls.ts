@@ -20,6 +20,8 @@ export class MaplibreTransformControls extends TransformControls {
     Y: new Vector3(0, 1, 0),
     Z: new Vector3(0, 0, 1),
   };
+  private useBoxTranslate = false;
+  private boxPickTarget: THREE.Object3D | null = null;
   public maxX = Infinity;
   public minX = -Infinity;
   public minY = -Infinity;
@@ -61,6 +63,11 @@ export class MaplibreTransformControls extends TransformControls {
     this.currentTile = tile;
   }
 
+  setBoxTranslateMode(enabled: boolean, pickTarget: THREE.Object3D | null): void {
+    this.useBoxTranslate = enabled;
+    this.boxPickTarget = enabled ? pickTarget : null;
+  }
+
   private updateRayCast(ndc: THREE.Vector2, raycaster: THREE.Raycaster): boolean {
     if (!this.map || !this.currentTile) {
       return false;
@@ -95,6 +102,22 @@ export class MaplibreTransformControls extends TransformControls {
     if (!this.updateRayCast(ndc, raycaster)) {
       return;
     }
+    if (this.useBoxTranslate) {
+      if (!this.boxPickTarget) {
+        return;
+      }
+      const intersect = this.intersectObjectWithRay(this.boxPickTarget, this.getRaycaster(), true);
+      if (intersect) {
+        this.axis = "XYZ";
+        this.onHover?.({ object3D: this.object, ndcX: pointer.x, ndcY: pointer.y });
+        this.map.triggerRepaint();
+      } else {
+        this.onNotHover?.();
+        this.enableEventMap();
+        this.axis = null;
+      }
+      return;
+    }
     const gizmo = (this as any)._gizmo;
     const intersect = this.intersectObjectWithRay(gizmo.picker[this.mode], this.getRaycaster());
     if (intersect) {
@@ -111,6 +134,16 @@ export class MaplibreTransformControls extends TransformControls {
   pointerDown(pointer: any): void {
     if (this.object === undefined || this.dragging === true || (pointer != null && pointer.button !== 0)) {
       return;
+    }
+    if (this.useBoxTranslate && this.axis === null && pointer !== null && this.boxPickTarget) {
+      const raycaster = this.getRaycaster();
+      const ndc = new THREE.Vector2(pointer.x, pointer.y);
+      if (this.updateRayCast(ndc, raycaster)) {
+        const intersect = this.intersectObjectWithRay(this.boxPickTarget, this.getRaycaster(), true);
+        if (intersect) {
+          this.axis = "XYZ";
+        }
+      }
     }
     if (this.axis !== null && pointer !== null) {
       const raycaster = this.getRaycaster();
