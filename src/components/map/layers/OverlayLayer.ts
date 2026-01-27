@@ -12,6 +12,7 @@ import { MaplibreShadowMesh } from "@/components/map/shadow/ShadowGeometry";
 export type OverlayLayerOptions = {
   id: string;
   onTransformChange?: (dirty: boolean) => void;
+  onElevationChange?: (elevation: number | null) => void;
 };
 
 export type TransformSnapshot = {
@@ -40,6 +41,7 @@ export class OverlayLayer implements CustomLayerInterface {
   private useBoxTranslate = false;
   private hoverDiv: HTMLDivElement | null = null;
   private onTransformChange?: (dirty: boolean) => void;
+  private onElevationChange?: (elevation: number | null) => void;
   private isDirty = false;
   private footprintMeshes: MaplibreShadowMesh[] = [];
   private showFootprint = false;
@@ -53,6 +55,7 @@ export class OverlayLayer implements CustomLayerInterface {
   constructor(opts: OverlayLayerOptions) {
     this.id = opts.id;
     this.onTransformChange = opts.onTransformChange;
+    this.onElevationChange = opts.onElevationChange;
     this.createToolTip();
   }
 
@@ -68,9 +71,17 @@ export class OverlayLayer implements CustomLayerInterface {
     if (!this.scene) {
       return;
     }
+    if (this.transformControl) {
+      this.transformControl.removeEventListener("objectChange", this.handleObjectChange);
+      this.transformControl.detach();
+      this.transformControl.dispose();
+      this.transformControl = null;
+    }
     this.currentTile = null;
     this.currentObject = null;
+    this.objectTransformSnapshot = null;
     this.setDirty(false);
+    this.onElevationChange?.(null);
     this.clearBoxHelper();
     this.clearFootprintMeshes();
     const gizmo = this.scene.getObjectByName("TransformControls");
@@ -92,10 +103,16 @@ export class OverlayLayer implements CustomLayerInterface {
     this.updateBoxHelper();
     this.map?.triggerRepaint();
     this.setDirty(false);
+    this.onElevationChange?.(obj.position.z);
   }
 
   snapCurrentObjectToGround(): void {
     if (!this.currentObject) {
+      return;
+    }
+    const epsilon = 1e-4;
+    if (Math.abs(this.currentObject.position.z) <= epsilon) {
+      this.onElevationChange?.(0);
       return;
     }
     this.currentObject.position.z = 0;
@@ -103,7 +120,9 @@ export class OverlayLayer implements CustomLayerInterface {
     this.currentObject.updateMatrixWorld(true);
     this.updateBoxHelper();
     this.map?.triggerRepaint();
-    this.setDirty(true);
+    // Recompute dirty state against the snapshot instead of forcing dirty=true.
+    this.updateDirtyState();
+    this.onElevationChange?.(0);
   }
 
   showFootPrint(enable: boolean): void {
@@ -189,6 +208,7 @@ export class OverlayLayer implements CustomLayerInterface {
     if (!this.currentObject) {
       return;
     }
+    this.onElevationChange?.(this.currentObject.position.z);
     this.transformControl = new MaplibreTransformControls(this.camera, this.renderer.domElement, this.map, this.applyGlobeMatrix);
     const objX = object.position.x;
     const objY = object.position.y;
@@ -350,6 +370,7 @@ export class OverlayLayer implements CustomLayerInterface {
   private handleObjectChange = (): void => {
     this.updateDirtyState();
     this.updateBoxHelper();
+    this.onElevationChange?.(this.currentObject?.position.z ?? null);
   };
 
   private updateDirtyState(): void {

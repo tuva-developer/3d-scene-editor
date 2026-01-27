@@ -14,6 +14,7 @@ interface MapViewProps {
   style?: React.CSSProperties;
   showTileBoundaries?: boolean;
   onSelectionChange?: (selected: boolean) => void;
+  onSelectionElevationChange?: (elevation: number | null) => void;
   onTransformDirtyChange?: (dirty: boolean) => void;
 }
 
@@ -50,6 +51,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
       zoom = 12,
       showTileBoundaries = true,
       onSelectionChange,
+      onSelectionElevationChange,
       onTransformDirtyChange,
     },
     ref
@@ -79,6 +81,13 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
     addControlMaplibre(map.current);
     map.current.showTileBoundaries = showTileBoundaries;
 
+    const handleResize = () => {
+      map.current?.resize();
+    };
+    window.addEventListener("resize", handleResize);
+    // Ensure the map gets a correct size after initial layout.
+    requestAnimationFrame(handleResize);
+
     map.current.on("load", () => {
       const mainMap = map.current;
       if (!mainMap) return;
@@ -86,6 +95,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
       const overlayLayer = new OverlayLayer({
         id: "overlay",
         onTransformChange: onTransformDirtyChange,
+        onElevationChange: onSelectionElevationChange,
       });
       const outlineLayer = new OutlineLayer({ id: "outline" });
       overlayLayerRef.current = overlayLayer;
@@ -121,6 +131,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
           overlayLayer.unselect();
           outlineLayer.unselect();
           onSelectionChange?.(false);
+          onSelectionElevationChange?.(null);
         },
       });
 
@@ -131,6 +142,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
     });
 
     return () => {
+      window.removeEventListener("resize", handleResize);
       if (map.current) {
         map.current.remove();
       }
@@ -211,6 +223,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
           overlayLayer.unselect();
           outlineLayer.unselect();
           onSelectionChange?.(false);
+          onSelectionElevationChange?.(null);
         },
       });
       editorLayer.setSunPos(sunPos.altitude, sunPos.azimuth);
@@ -234,7 +247,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
     },
   }));
 
-  return <div ref={mapContainer} className="map-container" />;
+  return <div ref={mapContainer} className="absolute inset-0 h-full w-full" />;
 });
 
 export default MapView;

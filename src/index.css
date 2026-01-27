@@ -1,9 +1,87 @@
 @import "maplibre-gl/dist/maplibre-gl.css";
+@import "tailwindcss";
+@import "@fortawesome/fontawesome-free/css/all.min.css";
 
 :root {
   color-scheme: light;
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-  background: #f3f2ef;
+  --app-bg: #f3f2ef;
+  --panel-bg: rgba(245, 245, 245, 0.96);
+  --panel-border: rgba(15, 23, 42, 0.12);
+  --panel-shadow: 0 8px 20px rgba(15, 23, 42, 0.16);
+  --divider: rgba(15, 23, 42, 0.12);
+  --text: #111827;
+  --text-muted: rgba(17, 24, 39, 0.6);
+  --section-heading: rgba(17, 24, 39, 0.72);
+  --seg-bg: #ffffff;
+  --seg-border: rgba(15, 23, 42, 0.16);
+  --seg-divider: rgba(15, 23, 42, 0.1);
+  --seg-hover: rgba(15, 23, 42, 0.06);
+  --btn-bg: #ffffff;
+  --btn-border: rgba(15, 23, 42, 0.16);
+  --btn-hover: rgba(15, 23, 42, 0.04);
+  --btn-border-hover: rgba(15, 23, 42, 0.28);
+  --btn-active-bg: #2f7df6;
+  --btn-active-border: #2f7df6;
+  --btn-active-text: #ffffff;
+  --btn-active-ring: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  --btn-danger-bg: #e74c3c;
+  --btn-danger-border: #e74c3c;
+  --btn-danger-hover: #d84333;
+  --btn-danger-text: #ffffff;
+  --focus-ring: rgba(47, 125, 246, 0.85);
+  --map-ctrl-bg: rgba(245, 245, 245, 0.96);
+  --map-ctrl-border: rgba(15, 23, 42, 0.16);
+  --map-ctrl-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+  --map-ctrl-hover: rgba(15, 23, 42, 0.06);
+  --map-ctrl-icon-filter: none;
+  --map-ctrl-divider: rgba(15, 23, 42, 0.12);
+  --map-compass-icon: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath fill='%23111827' d='m10.5 14 4-8 4 8z'/%3E%3Cpath fill='%236b7280' d='m10.5 16 4 8 4-8z'/%3E%3C/svg%3E");
+  --map-scale-bg: rgba(245, 245, 245, 0.96);
+  --map-scale-border: rgba(15, 23, 42, 0.16);
+  --map-scale-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+  --map-scale-text: #111827;
+  background: var(--app-bg);
+}
+
+.theme-dark {
+  color-scheme: dark;
+  --app-bg: #0f131a;
+  --panel-bg: rgba(17, 22, 28, 0.98);
+  --panel-border: rgba(255, 255, 255, 0.08);
+  --panel-shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
+  --divider: rgba(255, 255, 255, 0.1);
+  --text: #f3f5f7;
+  --text-muted: rgba(229, 233, 240, 0.72);
+  --section-heading: rgba(229, 233, 240, 0.8);
+  --seg-bg: rgba(255, 255, 255, 0.04);
+  --seg-border: rgba(255, 255, 255, 0.12);
+  --seg-divider: rgba(255, 255, 255, 0.1);
+  --seg-hover: rgba(255, 255, 255, 0.12);
+  --btn-bg: rgba(255, 255, 255, 0.05);
+  --btn-border: rgba(255, 255, 255, 0.14);
+  --btn-hover: rgba(255, 255, 255, 0.14);
+  --btn-border-hover: rgba(255, 255, 255, 0.24);
+  --btn-active-bg: #3b82f6;
+  --btn-active-border: #3b82f6;
+  --btn-active-text: #ffffff;
+  --btn-active-ring: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+  --btn-danger-bg: #e35d4f;
+  --btn-danger-border: #e35d4f;
+  --btn-danger-hover: #d14c3e;
+  --btn-danger-text: #ffffff;
+  --focus-ring: rgba(244, 180, 88, 0.85);
+  --map-ctrl-bg: rgba(17, 22, 25, 0.9);
+  --map-ctrl-border: rgba(255, 255, 255, 0.18);
+  --map-ctrl-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  --map-ctrl-hover: rgba(255, 255, 255, 0.16);
+  --map-ctrl-icon-filter: invert(1) brightness(1.2);
+  --map-ctrl-divider: rgba(255, 255, 255, 0.12);
+  --map-compass-icon: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath fill='%23f2f4f5' d='m10.5 14 4-8 4 8z'/%3E%3Cpath fill='%23717a83' d='m10.5 16 4 8 4-8z'/%3E%3C/svg%3E");
+  --map-scale-bg: rgba(17, 22, 25, 0.9);
+  --map-scale-border: rgba(255, 255, 255, 0.18);
+  --map-scale-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  --map-scale-text: #f2f4f5;
 }
 
 * {
@@ -13,266 +91,10 @@
 html, body, #root {
   height: 100%;
   margin: 0;
+  background: var(--app-bg);
+  color: var(--text);
 }
 
-.App {
-  position: relative;
-  height: 100%;
-}
-
-.map-container {
-  position: absolute;
-  inset: 0;
-}
-
-.editor-toolbar {
-  position: absolute;
-  left: 16px;
-  top: 16px;
-  display: grid;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 16px;
-  background: rgba(16, 18, 22, 0.82);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(10px);
-  z-index: 2000;
-  width: max-content;
-  min-width: 240px;
-}
-
-.editor-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: nowrap;
-}
-
-.editor-row-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.editor-group {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.editor-group-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  align-items: center;
-}
-
-.editor-group-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.editor-group-actions {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  justify-content: center;
-}
-
-.editor-group-label {
-  font-size: 10px;
-  line-height: 1;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(242, 244, 245, 0.7);
-  text-align: center;
-}
-
-.editor-segmented {
-  display: flex;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.08);
-  overflow: hidden;
-}
-
-.editor-segment-btn {
-  width: 34px;
-  height: 34px;
-  border: 0;
-  background: transparent;
-  color: #f2f4f5;
-  cursor: pointer;
-  font-size: 14px;
-  display: grid;
-  place-items: center;
-  transition: background 120ms ease, color 120ms ease;
-}
-
-.editor-segment-btn + .editor-segment-btn {
-  border-left: 1px solid rgba(255, 255, 255, 0.18);
-}
-
-.editor-segment-btn:hover {
-  background: rgba(255, 255, 255, 0.14);
-}
-
-.editor-segment-btn.active {
-  background: #f4b458;
-  color: #1c1410;
-}
-
-.editor-sub-divider {
-  width: 1px;
-  height: 34px;
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.editor-divider {
-  width: 1px;
-  height: 28px;
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.editor-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.08);
-  color: #f2f4f5;
-  cursor: pointer;
-  font-size: 14px;
-  display: grid;
-  place-items: center;
-  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease, color 120ms ease;
-}
-
-.editor-btn-compact {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  font-size: 12px;
-}
-
-.editor-btn:hover {
-  transform: translateY(-1px);
-  background: rgba(255, 255, 255, 0.16);
-}
-
-.editor-btn.active {
-  background: #f4b458;
-  color: #1c1410;
-  border-color: #f4b458;
-}
-
-.editor-btn-danger {
-  background: rgba(233, 76, 61, 0.85);
-  border-color: rgba(233, 76, 61, 0.95);
-  color: #1c0d0a;
-}
-
-.editor-btn-danger:hover {
-  background: rgba(233, 76, 61, 1);
-}
-
-.editor-action {
-  height: 34px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
-  color: #f2f4f5;
-  font-size: 12px;
-  letter-spacing: 0.01em;
-  cursor: pointer;
-  transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
-}
-
-.editor-action:hover {
-  background: rgba(255, 255, 255, 0.14);
-  transform: translateY(-1px);
-}
-
-.editor-action.active {
-  background: #37c77f;
-  border-color: #37c77f;
-  color: #0c1a12;
-}
-
-.tc-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.tc-label {
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(242, 244, 245, 0.7);
-}
-
-.tc-row {
-  display: flex;
-  gap: 6px;
-}
-
-.tc-row .tc-btn {
-  position: relative;
-}
-
-.tc-row .tc-btn + .tc-btn::before {
-  content: "";
-  position: absolute;
-  left: -4px;
-  top: 8px;
-  bottom: 8px;
-  width: 1px;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.tc-divider {
-  width: 1px;
-  height: 44px;
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.tc-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.08);
-  color: #f2f4f5;
-  cursor: pointer;
-  font-size: 15px;
-  display: grid;
-  place-items: center;
-  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease, color 120ms ease;
-}
-
-.tc-btn:hover {
-  transform: translateY(-1px);
-  background: rgba(255, 255, 255, 0.16);
-}
-
-.tc-btn.active {
-  background: #f4b458;
-  color: #1c1410;
-  border-color: #f4b458;
-}
-
-.tc-btn-danger {
-  background: rgba(233, 76, 61, 0.85);
-  border-color: rgba(233, 76, 61, 0.95);
-  color: #1c0d0a;
-}
-
-.tc-btn-danger:hover {
-  background: rgba(233, 76, 61, 1);
-}
 
 .maplibregl-ctrl-top-right {
   top: 16px;
@@ -280,9 +102,9 @@ html, body, #root {
 }
 
 .maplibregl-ctrl-group {
-  background: rgba(17, 22, 25, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
+  background: var(--map-ctrl-bg);
+  border: 1px solid var(--map-ctrl-border);
+  box-shadow: var(--map-ctrl-shadow);
   border-radius: 12px;
   overflow: hidden;
   backdrop-filter: blur(8px);
@@ -291,21 +113,21 @@ html, body, #root {
 .maplibregl-ctrl-group button {
   width: 36px;
   height: 36px;
-  color: #f2f4f5;
+  color: var(--text);
   background: transparent;
 }
 
 .maplibregl-ctrl-group button:hover {
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--map-ctrl-hover);
 }
 
 .maplibregl-ctrl-group .maplibregl-ctrl-icon {
-  filter: invert(1) brightness(1.2);
+  filter: var(--map-ctrl-icon-filter);
 }
 
 .maplibregl-ctrl-group button.maplibregl-ctrl-compass .maplibregl-ctrl-icon {
   filter: none;
-  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath fill='%23f2f4f5' d='m10.5 14 4-8 4 8z'/%3E%3Cpath fill='%23717a83' d='m10.5 16 4 8 4-8z'/%3E%3C/svg%3E");
+  background-image: var(--map-compass-icon);
 }
 
 .maplibregl-ctrl-group button:disabled .maplibregl-ctrl-icon {
@@ -314,18 +136,18 @@ html, body, #root {
 
 .maplibregl-ctrl-group button:focus {
   outline: none;
-  box-shadow: inset 0 0 0 1px rgba(244, 180, 88, 0.8);
+  box-shadow: inset 0 0 0 1px var(--focus-ring);
 }
 
 .maplibregl-ctrl-group button + button {
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 1px solid var(--map-ctrl-divider);
 }
 
 .maplibregl-ctrl-scale {
-  color: #f2f4f5;
-  background: rgba(17, 22, 25, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
+  color: var(--map-scale-text);
+  background: var(--map-scale-bg);
+  border: 1px solid var(--map-scale-border);
+  box-shadow: var(--map-scale-shadow);
   border-radius: 10px;
   padding: 6px 8px;
   backdrop-filter: blur(8px);
