@@ -1,8 +1,8 @@
 import { useMemo, useRef, useState } from "react";
-import MapView from "./components/map/MapView";
-import { TransformToolbar } from "./components/toolbar/TransformToolbar";
-import type { TransformMode } from "./components/toolbar/TransformToolbar";
-import type { MapViewHandle } from "./components/map/MapView";
+import MapView from "@/components/map/MapView";
+import { EditorToolbar } from "@/components/toolbar/EditorToolbar";
+import type { TransformMode } from "@/types/common";
+import type { MapViewHandle } from "@/components/map/MapView";
 
 function App() {
   const [mode, setMode] = useState<TransformMode>("translate");
@@ -27,7 +27,7 @@ function App() {
         }}
         onTransformDirtyChange={setHasChanges}
       />
-      <TransformToolbar
+      <EditorToolbar
         mode={mode}
         onChange={(nextMode) => {
           if (nextMode === "reset") {
@@ -47,6 +47,19 @@ function App() {
           });
         }}
         showReset={hasSelection && hasChanges}
+        showSnapToGround={hasSelection}
+        onSnapToGround={() => {
+          mapHandleRef.current?.snapObjectSelectedToGround();
+        }}
+        enableClippingPlane={(enable) => {
+          mapHandleRef.current?.enableClippingPlanesObjectSelected(enable);
+        }}
+        enableFootPrintWhenEdit={(enable) => {
+          mapHandleRef.current?.enableFootPrintWhenEdit(enable);
+        }}
+        onAddLayer={() => {
+          mapHandleRef.current?.addEditLayer();
+        }}
       />
     </div>
   );

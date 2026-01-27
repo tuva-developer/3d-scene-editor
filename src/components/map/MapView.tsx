@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
 import maplibregl from "maplibre-gl";
-import { ModelLayer } from "./layers/ModelLayer";
-import { OverlayLayer } from "./layers/OverlayLayer";
-import OutlineLayer from "./layers/OutlineLayer";
-import type { TransformMode } from "../toolbar/TransformToolbar";
+import { ModelLayer } from "@/components/map/layers/ModelLayer";
+import { OverlayLayer } from "@/components/map/layers/OverlayLayer";
+import OutlineLayer from "@/components/map/layers/OutlineLayer";
+import { EditLayer } from "@/components/map/layers/EditLayer";
+import type { TransformMode } from "@/types/common";
+import { loadModelFromGlb, objectEnableClippingPlaneZ } from "@/components/map/data/models/objModel";
 import * as SunCalc from "suncalc";
 
 interface MapViewProps {
@@ -18,6 +20,10 @@ interface MapViewProps {
 export interface MapViewHandle {
   setTransformMode(m: TransformMode): void;
   setShowTileBoundaries(show: boolean): void;
+  snapObjectSelectedToGround(): void;
+  enableClippingPlanesObjectSelected(enable: boolean): void;
+  enableFootPrintWhenEdit(enable: boolean): void;
+  addEditLayer(): void;
 }
 
 function getSunPosition(lat: number, lon: number) {
@@ -53,6 +59,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
   const overlayLayerRef = useRef<OverlayLayer | null>(null);
   const outlineLayerRef = useRef<OutlineLayer | null>(null);
   const currentModeRef = useRef<TransformMode>("translate");
+  const editLayersRef = useRef<EditLayer[]>([]);
 
   useEffect(() => {
     if (!mapContainer.current) return;
@@ -153,6 +160,77 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
       if (map.current) {
         map.current.showTileBoundaries = show;
       }
+    },
+    snapObjectSelectedToGround() {
+      overlayLayerRef.current?.snapCurrentObjectToGround();
+      map.current?.triggerRepaint();
+    },
+    enableClippingPlanesObjectSelected(enable) {
+      const currentObject = overlayLayerRef.current?.getCurrentObject();
+      if (!currentObject) {
+        return;
+      }
+      objectEnableClippingPlaneZ(currentObject, enable);
+      map.current?.triggerRepaint();
+    },
+    enableFootPrintWhenEdit(enable) {
+      overlayLayerRef.current?.showFootPrint(enable);
+      map.current?.triggerRepaint();
+    },
+    addEditLayer() {
+      const mainMap = map.current;
+      const overlayLayer = overlayLayerRef.current;
+      const outlineLayer = outlineLayerRef.current;
+      if (!mainMap || !overlayLayer || !outlineLayer) {
+        return;
+      }
+      const id = crypto.randomUUID();
+      const centerPoint = mainMap.getCenter();
+      const sunPos = getSunPosition(centerPoint.lat, centerPoint.lng);
+      const sunOptions = {
+        shadow: true,
+        altitude: sunPos.altitude,
+        azimuth: sunPos.azimuth,
+      };
+      const editorLayer = new EditLayer({
+        id,
+        sun: sunOptions,
+        editorLevel: 16,
+        applyGlobeMatrix: false,
+        onPick: (info) => {
+          overlayLayer.setCurrentTileID(info.overScaledTileId);
+          overlayLayer.attachGizmoToObject(
+            info.object,
+            currentModeRef.current === "reset" ? "translate" : currentModeRef.current
+          );
+          outlineLayer.setCurrentTileID(info.overScaledTileId);
+          outlineLayer.attachObject(info.object);
+          onSelectionChange?.(true);
+        },
+        onPickFail: () => {
+          overlayLayer.unselect();
+          outlineLayer.unselect();
+          onSelectionChange?.(false);
+        },
+      });
+      editorLayer.setSunPos(sunPos.altitude, sunPos.azimuth);
+      const glbPath = (import.meta.env.VITE_EDIT_MODEL_URL as string | undefined)?.trim() || "/test_data/test.glb";
+      loadModelFromGlb(glbPath)
+        .then((object3d) => {
+          editorLayer.addObjectsToCache([
+            {
+              id: glbPath,
+              object3d,
+            },
+          ]);
+          editorLayer.addObjectToScene(glbPath);
+        })
+        .catch((err) => {
+          console.error("[MapView] Failed to load edit model:", err);
+        });
+      mainMap.addLayer(editorLayer);
+      mainMap.moveLayer(editorLayer.id, outlineLayer.id);
+      editLayersRef.current.push(editorLayer);
     },
   }));
 

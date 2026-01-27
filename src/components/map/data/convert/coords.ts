@@ -1,4 +1,4 @@
-import type { LatLon, LocalCoordinate } from "../types";
+import type { LatLon, LocalCoordinate } from "@/components/map/data/types";
 
 const MIN_ZOOM = 0;
 const MAX_ZOOM = 22;

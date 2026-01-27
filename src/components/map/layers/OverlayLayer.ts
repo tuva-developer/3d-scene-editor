@@ -1,12 +1,13 @@
 import type { Map, OverscaledTileID, CustomLayerInterface } from "maplibre-gl";
-import type { LatLon } from "../data/types";
-import { MaplibreTransformControls } from "../controls/MaplibreTransformControls";
-import type { HoverParameter } from "../controls/MaplibreTransformControls";
-import { decomposeObject } from "../data/models/objModel";
+import type { LatLon } from "@/components/map/data/types";
+import { MaplibreTransformControls } from "@/components/map/controls/MaplibreTransformControls";
+import type { HoverParameter } from "@/components/map/controls/MaplibreTransformControls";
+import { decomposeObject } from "@/components/map/data/models/objModel";
 import type { TransformControlsMode } from "three/examples/jsm/controls/TransformControls.js";
-import type { TransformMode } from "../../toolbar/TransformToolbar";
-import { tileLocalToLatLon, getMetersPerExtentUnit } from "../data/convert/coords";
+import type { TransformMode } from "@/types/common";
+import { tileLocalToLatLon, getMetersPerExtentUnit } from "@/components/map/data/convert/coords";
 import * as THREE from "three";
+import { MaplibreShadowMesh } from "@/components/map/shadow/ShadowGeometry";
 
 export type OverlayLayerOptions = {
   id: string;
@@ -40,6 +41,14 @@ export class OverlayLayer implements CustomLayerInterface {
   private hoverDiv: HTMLDivElement | null = null;
   private onTransformChange?: (dirty: boolean) => void;
   private isDirty = false;
+  private footprintMeshes: MaplibreShadowMesh[] = [];
+  private showFootprint = false;
+  private getControlMode(mode: TransformMode): TransformControlsMode {
+    if (mode === "translate-box" || mode === "reset") {
+      return "translate";
+    }
+    return mode;
+  }
 
   constructor(opts: OverlayLayerOptions) {
     this.id = opts.id;
@@ -51,6 +60,10 @@ export class OverlayLayer implements CustomLayerInterface {
     this.currentTile = overTile;
   }
 
+  getCurrentObject(): THREE.Object3D | null {
+    return this.currentObject;
+  }
+
   unselect(): void {
     if (!this.scene) {
       return;
@@ -59,6 +72,7 @@ export class OverlayLayer implements CustomLayerInterface {
     this.currentObject = null;
     this.setDirty(false);
     this.clearBoxHelper();
+    this.clearFootprintMeshes();
     const gizmo = this.scene.getObjectByName("TransformControls");
     if (gizmo) {
       this.scene.remove(gizmo);
@@ -78,6 +92,26 @@ export class OverlayLayer implements CustomLayerInterface {
     this.updateBoxHelper();
     this.map?.triggerRepaint();
     this.setDirty(false);
+  }
+
+  snapCurrentObjectToGround(): void {
+    if (!this.currentObject) {
+      return;
+    }
+    this.currentObject.position.z = 0;
+    this.currentObject.updateMatrix();
+    this.currentObject.updateMatrixWorld(true);
+    this.updateBoxHelper();
+    this.map?.triggerRepaint();
+    this.setDirty(true);
+  }
+
+  showFootPrint(enable: boolean): void {
+    this.showFootprint = enable;
+    for (const mesh of this.footprintMeshes) {
+      mesh.visible = enable;
+    }
+    this.map?.triggerRepaint();
   }
 
   showToolTip(parameter: HoverParameter): void {
@@ -174,7 +208,7 @@ export class OverlayLayer implements CustomLayerInterface {
       scale: object.scale.clone(),
       quaternion: object.quaternion.clone(),
     };
-    const controlMode: TransformControlsMode = mode === "translate-box" ? "translate" : mode;
+    const controlMode = this.getControlMode(mode);
     if (controlMode === "rotate") {
       this.transformControl.showX = false;
       this.transformControl.showY = false;
@@ -196,6 +230,8 @@ export class OverlayLayer implements CustomLayerInterface {
     this.transformControl.addEventListener("objectChange", this.handleObjectChange);
     this.scene.add(this.transformControl as unknown as THREE.Object3D);
     this.setBoxTranslateMode(mode === "translate-box");
+    this.buildFootprintMeshes();
+    this.showFootPrint(this.showFootprint);
     this.setDirty(false);
 
     this.transformControl.onHover = (parameter: HoverParameter): void => {
@@ -210,7 +246,7 @@ export class OverlayLayer implements CustomLayerInterface {
     if (!this.transformControl) {
       return;
     }
-    const controlMode: TransformControlsMode = mode === "translate-box" ? "translate" : mode;
+    const controlMode = this.getControlMode(mode);
     this.useBoxTranslate = mode === "translate-box";
     this.transformControl.setMode(controlMode);
     if (controlMode === "rotate") {
@@ -265,6 +301,7 @@ export class OverlayLayer implements CustomLayerInterface {
       this.transformControl.removeEventListener("objectChange", this.handleObjectChange);
     }
     this.clearBoxHelper();
+    this.clearFootprintMeshes();
     this.renderer?.dispose();
     this.scene = null;
     this.renderer = null;
@@ -292,8 +329,22 @@ export class OverlayLayer implements CustomLayerInterface {
       if (!this.scene) {
         return;
       }
+      this.updateFootprintMatrix();
       this.renderer.render(this.scene, this.camera);
     }
+  }
+
+  private updateFootprintMatrix(): void {
+    if (!this.scene) {
+      return;
+    }
+    const dir = new THREE.Vector3(0, 0, 1);
+    this.scene.traverse((child) => {
+      if (child instanceof MaplibreShadowMesh) {
+        const scaleUnit = child.userData?.scaleUnit ?? 1;
+        child.update(new THREE.Vector3(dir.x, dir.y, -dir.z / scaleUnit));
+      }
+    });
   }
 
   private handleObjectChange = (): void => {
@@ -409,6 +460,35 @@ export class OverlayLayer implements CustomLayerInterface {
       }
       this.boxPickMesh = null;
     }
+  }
+
+  private buildFootprintMeshes(): void {
+    if (!this.scene || !this.currentObject) {
+      return;
+    }
+    this.clearFootprintMeshes();
+    const scaleUnit = (this.currentObject.userData as { scaleUnit?: number } | undefined)?.scaleUnit ?? 1;
+    this.currentObject.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        const footprint = new MaplibreShadowMesh(child);
+        footprint.userData = { scaleUnit };
+        footprint.matrixAutoUpdate = false;
+        footprint.visible = this.showFootprint;
+        this.scene?.add(footprint);
+        this.footprintMeshes.push(footprint);
+      }
+    });
+  }
+
+  private clearFootprintMeshes(): void {
+    if (!this.scene) {
+      this.footprintMeshes = [];
+      return;
+    }
+    for (const mesh of this.footprintMeshes) {
+      this.scene.remove(mesh);
+    }
+    this.footprintMeshes = [];
   }
 
   private createBoxGeometry(object: THREE.Object3D): { geometry: THREE.BoxGeometry; center: THREE.Vector3 } {

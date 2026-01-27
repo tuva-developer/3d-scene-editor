@@ -3,14 +3,14 @@ import { Map, OverscaledTileID, MapMouseEvent } from "maplibre-gl";
 import type { CustomLayerInterface } from "maplibre-gl";
 import * as THREE from "three";
 import { LRUCache } from "lru-cache";
-import type { DataTileInfo, ObjectInfo, Model, LatLon } from "../data/types";
-import { tileLocalToLatLon, getMetersPerExtentUnit, clampZoom } from "../data/convert/coords";
-import { requestVectorTile } from "../data/tile/request";
-import { parseVectorTile } from "../data/convert/vectorTile";
-import { parseTileInfo } from "../data/tile/parseTile";
-import { createLightGroup, downloadModel, prepareModelForRender } from "../data/models/objModel";
-import { calculateSunDirectionMaplibre } from "../shadow/ShadowHelper";
-import { MaplibreShadowMesh } from "../shadow/ShadowGeometry";
+import type { DataTileInfo, ObjectInfo, Model, LatLon } from "@/components/map/data/types";
+import { tileLocalToLatLon, getMetersPerExtentUnit, clampZoom } from "@/components/map/data/convert/coords";
+import { requestVectorTile } from "@/components/map/data/tile/request";
+import { parseVectorTile } from "@/components/map/data/convert/vectorTile";
+import { parseTileInfo } from "@/components/map/data/tile/parseTile";
+import { createLightGroup, downloadModel, prepareModelForRender } from "@/components/map/data/models/objModel";
+import { calculateSunDirectionMaplibre } from "@/components/map/shadow/ShadowHelper";
+import { MaplibreShadowMesh } from "@/components/map/shadow/ShadowGeometry";
 
 export type SunOptions = {
   shadow: boolean;
@@ -154,6 +154,7 @@ export class ModelLayer implements CustomLayerInterface {
       stencil: true,
     });
     this.renderer.autoClear = false;
+    this.renderer.localClippingEnabled = true;
     map.on("click", this.handleClick);
   }
 

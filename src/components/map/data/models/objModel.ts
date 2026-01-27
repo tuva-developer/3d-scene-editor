@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { tileLocalToLatLon } from "../convert/coords";
+import { tileLocalToLatLon } from "@/components/map/data/convert/coords";
 
 export function createYupToZUpMatrix(): THREE.Matrix4 {
   const matrix = new THREE.Matrix4();
@@ -169,4 +169,39 @@ export function createLightGroup(scene: THREE.Scene): void {
   hemiLight.position.set(0, 0, -1);
   lightGroup.add(hemiLight);
   scene.add(lightGroup);
+}
+
+export function objectEnableClippingPlaneZ(object: THREE.Object3D, enable: boolean): void {
+  const planeZ = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+  object.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) {
+      return;
+    }
+    const mat = child.material;
+    if (Array.isArray(mat)) {
+      mat.forEach((material) => {
+        if (enable) {
+          material.clippingPlanes = [planeZ];
+          material.clipIntersection = false;
+          material.clipShadows = false;
+        } else {
+          material.clippingPlanes = [];
+          material.clipIntersection = false;
+          material.clipShadows = false;
+        }
+        material.needsUpdate = true;
+      });
+    } else {
+      if (enable) {
+        mat.clippingPlanes = [planeZ];
+        mat.clipIntersection = false;
+        mat.clipShadows = false;
+      } else {
+        mat.clippingPlanes = [];
+        mat.clipIntersection = false;
+        mat.clipShadows = false;
+      }
+      mat.needsUpdate = true;
+    }
+  });
 }

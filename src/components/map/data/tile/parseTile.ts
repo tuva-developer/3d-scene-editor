@@ -1,5 +1,5 @@
 import { VectorTile } from "@mapbox/vector-tile";
-import type { ObjectInfo } from "../types";
+import type { ObjectInfo } from "@/components/map/data/types";
 
 export function parseTileInfo(tile: VectorTile, sourceLayer: string): ObjectInfo[] {
   const layer = tile.layers[sourceLayer];

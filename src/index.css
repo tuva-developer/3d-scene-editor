@@ -25,18 +25,180 @@ html, body, #root {
   inset: 0;
 }
 
-.tc-toolbar {
+.editor-toolbar {
   position: absolute;
   left: 16px;
   top: 16px;
-  display: flex;
+  display: grid;
   gap: 10px;
-  padding: 4px 8px;
-  border-radius: 14px;
-  background: rgba(17, 22, 25, 0.82);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
-  backdrop-filter: blur(8px);
+  padding: 8px 10px;
+  border-radius: 16px;
+  background: rgba(16, 18, 22, 0.82);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(10px);
+  z-index: 2000;
+  width: max-content;
+  min-width: 240px;
+}
+
+.editor-row {
+  display: flex;
   align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.editor-row-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.editor-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.editor-group-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+}
+
+.editor-group-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.editor-group-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+}
+
+.editor-group-label {
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(242, 244, 245, 0.7);
+  text-align: center;
+}
+
+.editor-segmented {
+  display: flex;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.editor-segment-btn {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  background: transparent;
+  color: #f2f4f5;
+  cursor: pointer;
+  font-size: 14px;
+  display: grid;
+  place-items: center;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.editor-segment-btn + .editor-segment-btn {
+  border-left: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.editor-segment-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.editor-segment-btn.active {
+  background: #f4b458;
+  color: #1c1410;
+}
+
+.editor-sub-divider {
+  width: 1px;
+  height: 34px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.editor-divider {
+  width: 1px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.editor-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f2f4f5;
+  cursor: pointer;
+  font-size: 14px;
+  display: grid;
+  place-items: center;
+  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.editor-btn-compact {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.editor-btn:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.editor-btn.active {
+  background: #f4b458;
+  color: #1c1410;
+  border-color: #f4b458;
+}
+
+.editor-btn-danger {
+  background: rgba(233, 76, 61, 0.85);
+  border-color: rgba(233, 76, 61, 0.95);
+  color: #1c0d0a;
+}
+
+.editor-btn-danger:hover {
+  background: rgba(233, 76, 61, 1);
+}
+
+.editor-action {
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f2f4f5;
+  font-size: 12px;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.editor-action:hover {
+  background: rgba(255, 255, 255, 0.14);
+  transform: translateY(-1px);
+}
+
+.editor-action.active {
+  background: #37c77f;
+  border-color: #37c77f;
+  color: #0c1a12;
 }
 
 .tc-group {
