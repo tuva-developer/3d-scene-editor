@@ -86,6 +86,7 @@ export class ModelLayer implements CustomLayerInterface {
   private raycaster = new THREE.Raycaster();
   private onPick?: (info: PickHit) => void;
   private onPickFail?: () => void;
+  private pickEnabled = true;
 
   constructor(opts: ModelLayerOptions & { onPick?: (info: PickHit) => void; onPickFail?: () => void }) {
     this.id = opts.id;
@@ -133,6 +134,10 @@ export class ModelLayer implements CustomLayerInterface {
   setVisible(v: boolean): void {
     this.visible = v;
     this.map?.triggerRepaint?.();
+  }
+
+  setPickEnabled(enabled: boolean): void {
+    this.pickEnabled = enabled;
   }
 
   setSunPos(altitude: number, azimuth: number, shadow: boolean = true): void {
@@ -203,7 +208,7 @@ export class ModelLayer implements CustomLayerInterface {
   }
 
   private handleClick = (e: MapMouseEvent) => {
-    if (!this.map || !this.camera || !this.renderer || !this.visible) {
+    if (!this.map || !this.camera || !this.renderer || !this.visible || !this.pickEnabled) {
       return;
     }
     const canvas = this.map.getCanvas();

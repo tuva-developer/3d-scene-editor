@@ -17,6 +17,8 @@ class OutlineLayer implements CustomLayerInterface {
   private scene: THREE.Scene | null = null;
   private composer: EffectComposer | null = null;
   private outlinePass: OutlinePass | null = null;
+  private canvas: HTMLCanvasElement | null = null;
+  private resizeHandler: (() => void) | null = null;
   private visible = true;
   private applyGlobeMatrix = false;
   private currentTile: OverscaledTileID | null = null;
@@ -50,9 +52,9 @@ class OutlineLayer implements CustomLayerInterface {
   private configOutlinePass(outlinePass: OutlinePass): void {
     outlinePass.renderToScreen = true;
     outlinePass.clear = false;
-    outlinePass.edgeStrength = 3;
+    outlinePass.edgeStrength = 4.5;
     outlinePass.edgeGlow = 0;
-    outlinePass.edgeThickness = 1;
+    outlinePass.edgeThickness = 1.6;
     outlinePass.visibleEdgeColor = new THREE.Color(0xff8a00);
     outlinePass.hiddenEdgeColor = new THREE.Color(0x000000);
   }
@@ -65,15 +67,16 @@ class OutlineLayer implements CustomLayerInterface {
 
     this.renderer = new THREE.WebGLRenderer({
       alpha: true,
-      antialias: false,
+      antialias: true,
       powerPreference: "high-performance",
     });
 
-    const pixelRatio = Math.min(window.devicePixelRatio, 1.5);
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
     this.renderer.setPixelRatio(pixelRatio);
     this.renderer.setSize(window.innerWidth, window.innerHeight);
 
     const canvas = this.renderer.domElement;
+    this.canvas = canvas;
     canvas.style.position = "absolute";
     canvas.style.top = "0";
     canvas.style.left = "0";
@@ -86,17 +89,36 @@ class OutlineLayer implements CustomLayerInterface {
     map.getContainer().appendChild(canvas);
 
     this.renderer.setClearColor(0x000000, 0);
-    this.renderer.setPixelRatio(1);
     this.composer = new EffectComposer(this.renderer);
-    const scale = 0.7;
+    const scale = 1;
     this.composer.setSize(window.innerWidth * scale, window.innerHeight * scale);
     const outlinePass = new OutlinePass(new THREE.Vector2(window.innerWidth, window.innerHeight), this.scene, this.camera);
     this.configOutlinePass(outlinePass);
     this.composer.addPass(outlinePass);
     this.outlinePass = outlinePass;
+
+    this.resizeHandler = () => {
+      if (!this.renderer || !this.composer || !this.outlinePass) {
+        return;
+      }
+      const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+      this.renderer.setPixelRatio(pixelRatio);
+      this.renderer.setSize(window.innerWidth, window.innerHeight);
+      this.composer.setSize(window.innerWidth, window.innerHeight);
+      this.outlinePass.setSize(window.innerWidth, window.innerHeight);
+    };
+    window.addEventListener("resize", this.resizeHandler);
   }
 
   onRemove(): void {
+    if (this.resizeHandler) {
+      window.removeEventListener("resize", this.resizeHandler);
+      this.resizeHandler = null;
+    }
+    if (this.canvas?.parentElement) {
+      this.canvas.parentElement.removeChild(this.canvas);
+    }
+    this.canvas = null;
     this.renderer?.dispose();
     this.scene = null;
     this.renderer = null;

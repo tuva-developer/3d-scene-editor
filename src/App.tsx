@@ -1,15 +1,86 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import MapView from "@/components/map/MapView";
 import { EditorToolbar } from "@/components/toolbar/EditorToolbar";
-import type { ThemeMode, TransformMode } from "@/types/common";
+import LayerNameModal from "@/components/ui/LayerNameModal";
+import type { LayerOption, MapStyleOption, ThemeMode, TransformMode } from "@/types/common";
 import type { MapViewHandle } from "@/components/map/MapView";
 
 function App() {
+  const envStylePath = (import.meta.env.VITE_STYLE_PATH as string | undefined)?.trim() ?? "";
+  const styleOptions: MapStyleOption[] = useMemo(() => {
+    const options: MapStyleOption[] = [
+      {
+        id: "openfreemap-liberty",
+        label: "OpenFreeMap Liberty",
+        url: "https://tiles.openfreemap.org/styles/liberty",
+      },
+      {
+        id: "openfreemap-bright",
+        label: "OpenFreeMap Bright",
+        url: "https://tiles.openfreemap.org/styles/bright",
+      },
+      {
+        id: "openfreemap-positron",
+        label: "OpenFreeMap Positron",
+        url: "https://tiles.openfreemap.org/styles/positron",
+      },
+      {
+        id: "maplibre-demotiles",
+        label: "MapLibre Demo",
+        url: "https://demotiles.maplibre.org/style.json",
+      },
+      {
+        id: "carto-positron",
+        label: "CARTO Positron",
+        url: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
+      },
+      {
+        id: "carto-voyager",
+        label: "CARTO Voyager",
+        url: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
+      },
+      {
+        id: "carto-dark-matter",
+        label: "CARTO Dark Matter",
+        url: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
+      },
+    ];
+
+    if (envStylePath) {
+      options.unshift({
+        id: "env-custom",
+        label: "Custom (Env)",
+        url: envStylePath,
+      });
+    }
+
+    return options;
+  }, [envStylePath]);
+
   const [mode, setMode] = useState<TransformMode>("translate");
   const [showTiles, setShowTiles] = useState<boolean>(false);
   const [hasSelection, setHasSelection] = useState<boolean>(false);
   const [hasChanges, setHasChanges] = useState<boolean>(false);
   const [selectionElevation, setSelectionElevation] = useState<number | null>(null);
+  const [layerOptions, setLayerOptions] = useState<LayerOption[]>([{ id: "models", label: "Models (Base)" }]);
+  const [activeLayerId, setActiveLayerId] = useState<string>(() => {
+    if (typeof window === "undefined") {
+      return "models";
+    }
+    return window.localStorage.getItem("scene-editor-active-layer") || "models";
+  });
+  const [layerModalOpen, setLayerModalOpen] = useState(false);
+  const [layerModalInitialName, setLayerModalInitialName] = useState("Edit Layer 1");
+  const [styleId, setStyleId] = useState<string>(() => {
+    if (typeof window === "undefined") {
+      return envStylePath ? "env-custom" : "openfreemap-liberty";
+    }
+    const stored = window.localStorage.getItem("scene-editor-style-id");
+    if (stored) {
+      return stored;
+    }
+    return envStylePath ? "env-custom" : "openfreemap-liberty";
+  });
   const [theme, setTheme] = useState<ThemeMode>(() => {
     if (typeof window === "undefined") {
       return "light";
@@ -19,6 +90,22 @@ function App() {
   });
   const mapHandleRef = useRef<MapViewHandle>(null);
   const mapCenter = useMemo(() => [106.6297, 10.8231] as [number, number], []);
+  const currentStyle = styleOptions.find((option) => option.id === styleId) ?? styleOptions[0];
+  const styleUrl = currentStyle.url;
+  const editLayerCount = layerOptions.filter((option) => option.id !== "models").length;
+
+  useEffect(() => {
+    const exists = layerOptions.some((option) => option.id === activeLayerId);
+    if (!exists && layerOptions[0]) {
+      setActiveLayerId(layerOptions[0].id);
+    }
+  }, [activeLayerId, layerOptions]);
+
+  useEffect(() => {
+    if (currentStyle.id !== styleId) {
+      setStyleId(currentStyle.id);
+    }
+  }, [currentStyle.id, styleId]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -27,11 +114,43 @@ function App() {
     window.localStorage.setItem("scene-editor-theme", theme);
   }, [theme]);
 
+  useEffect(() => {
+    window.localStorage.setItem("scene-editor-style-id", currentStyle.id);
+    setHasSelection(false);
+    setHasChanges(false);
+    setSelectionElevation(null);
+  }, [currentStyle.id]);
+
+  useEffect(() => {
+    window.localStorage.setItem("scene-editor-active-layer", activeLayerId);
+    setHasSelection(false);
+    setHasChanges(false);
+    setSelectionElevation(null);
+  }, [activeLayerId]);
+
+  const openLayerModal = () => {
+    const defaultName = `Edit Layer ${editLayerCount + 1}`;
+    setLayerModalInitialName(defaultName);
+    setLayerModalOpen(true);
+  };
+
+  const handleConfirmLayerName = (name: string, file: File | null) => {
+    const nextName = name || layerModalInitialName;
+    const modelUrl = file ? URL.createObjectURL(file) : undefined;
+    const newLayerId = mapHandleRef.current?.addEditLayer({ name: nextName, modelUrl }) ?? null;
+    if (newLayerId) {
+      setActiveLayerId(newLayerId);
+    }
+    setLayerModalOpen(false);
+  };
+
   return (
     <div className="relative h-screen w-screen overflow-hidden">
       <MapView
         center={mapCenter}
         zoom={16}
+        styleUrl={styleUrl}
+        activeLayerId={activeLayerId}
         ref={mapHandleRef}
         showTileBoundaries={showTiles}
         onSelectionChange={(selected) => {
@@ -43,6 +162,7 @@ function App() {
         }}
         onSelectionElevationChange={setSelectionElevation}
         onTransformDirtyChange={setHasChanges}
+        onLayerOptionsChange={setLayerOptions}
       />
       <EditorToolbar
         mode={mode}
@@ -75,12 +195,26 @@ function App() {
           mapHandleRef.current?.enableFootPrintWhenEdit(enable);
         }}
         onAddLayer={() => {
-          mapHandleRef.current?.addEditLayer();
+          openLayerModal();
         }}
         theme={theme}
         onToggleTheme={() => {
           setTheme((current) => (current === "dark" ? "light" : "dark"));
         }}
+        styleOptions={styleOptions}
+        styleId={currentStyle.id}
+        onChangeStyle={setStyleId}
+        layerOptions={layerOptions}
+        activeLayerId={activeLayerId}
+        onChangeActiveLayer={setActiveLayerId}
+      />
+      <LayerNameModal
+        open={layerModalOpen}
+        initialValue={layerModalInitialName}
+        onCancel={() => setLayerModalOpen(false)}
+        onConfirm={handleConfirmLayerName}
+        title="New Edit Layer"
+        confirmLabel="Create Layer"
       />
     </div>
   );

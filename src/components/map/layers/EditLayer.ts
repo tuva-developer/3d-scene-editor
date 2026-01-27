@@ -75,6 +75,7 @@ export class EditLayer implements CustomLayerInterface {
   private applyGlobeMatrix = false;
   private onPick?: (info: PickHit) => void;
   private onPickFail?: () => void;
+  private pickEnabled = true;
 
   constructor(opts: EditorLayerOpts & { onPick?: (info: PickHit) => void } & { onPickFail?: () => void }) {
     this.id = opts.id;
@@ -102,6 +103,10 @@ export class EditLayer implements CustomLayerInterface {
       sunDir: calculateSunDirectionMaplibre(THREE.MathUtils.degToRad(altitude), THREE.MathUtils.degToRad(azimuth)),
       shadow,
     };
+  }
+
+  setPickEnabled(enabled: boolean): void {
+    this.pickEnabled = enabled;
   }
 
   onAdd(map: maplibregl.Map, gl: WebGLRenderingContext): void {
@@ -210,7 +215,7 @@ export class EditLayer implements CustomLayerInterface {
   }
 
   private handleClick = (e: MapMouseEvent) => {
-    if (!this.map || !this.camera || !this.renderer || !this.visible) {
+    if (!this.map || !this.camera || !this.renderer || !this.visible || !this.pickEnabled) {
       return;
     }
     const canvas = this.map.getCanvas();

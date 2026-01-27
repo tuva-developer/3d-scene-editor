@@ -95,6 +95,16 @@ html, body, #root {
   color: var(--text);
 }
 
+/* Native select/option styling needs plain CSS, especially in dark mode. */
+.theme-dark select {
+  color-scheme: dark;
+}
+
+.theme-dark select option {
+  background-color: #0f172a;
+  color: #f8fafc;
+}
+
 
 .maplibregl-ctrl-top-right {
   top: 16px;

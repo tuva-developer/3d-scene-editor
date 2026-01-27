@@ -9,6 +9,17 @@ export type HoverParameter = {
 };
 
 export class MaplibreTransformControls extends TransformControls {
+  private static readonly AXIS_COLORS: Record<string, string> = {
+    X: "#ef4444",
+    Y: "#22c55e",
+    Z: "#3b82f6",
+    E: "#f59e0b",
+    XY: "#eab308",
+    YZ: "#14b8a6",
+    XZ: "#a855f7",
+    XYZ: "#f8fafc",
+    XYZE: "#f8fafc",
+  };
   private map: any;
   private currentTile: any;
   private applyGlobeMatrix: boolean;
@@ -20,8 +31,6 @@ export class MaplibreTransformControls extends TransformControls {
     Y: new Vector3(0, 1, 0),
     Z: new Vector3(0, 0, 1),
   };
-  private useBoxTranslate = false;
-  private boxPickTarget: THREE.Object3D | null = null;
   public maxX = Infinity;
   public minX = -Infinity;
   public minY = -Infinity;
@@ -50,9 +59,12 @@ export class MaplibreTransformControls extends TransformControls {
       handles = handles.concat(gizmo.picker[this.mode].children);
       handles = handles.concat(gizmo.gizmo[this.mode].children);
       handles = handles.concat(gizmo.helper[this.mode].children);
+      const activeAxis = this.axis;
+      const isDarkTheme = this.isDarkTheme();
       for (let i = 0; i < handles.length; i++) {
         const handle = handles[i];
-        handle.scale.set(3000, 3000, 3000);
+        handle.scale.set(2800, 2800, 2800);
+        this.styleHandle(handle, activeAxis, isDarkTheme);
         handle.updateMatrix();
         handle.updateMatrixWorld(true);
       }
@@ -61,11 +73,6 @@ export class MaplibreTransformControls extends TransformControls {
 
   setCurrentTile(tile: any): void {
     this.currentTile = tile;
-  }
-
-  setBoxTranslateMode(enabled: boolean, pickTarget: THREE.Object3D | null): void {
-    this.useBoxTranslate = enabled;
-    this.boxPickTarget = enabled ? pickTarget : null;
   }
 
   private updateRayCast(ndc: THREE.Vector2, raycaster: THREE.Raycaster): boolean {
@@ -102,22 +109,6 @@ export class MaplibreTransformControls extends TransformControls {
     if (!this.updateRayCast(ndc, raycaster)) {
       return;
     }
-    if (this.useBoxTranslate) {
-      if (!this.boxPickTarget) {
-        return;
-      }
-      const intersect = this.intersectObjectWithRay(this.boxPickTarget, this.getRaycaster(), true);
-      if (intersect) {
-        this.axis = "XYZ";
-        this.onHover?.({ object3D: this.object, ndcX: pointer.x, ndcY: pointer.y });
-        this.map.triggerRepaint();
-      } else {
-        this.onNotHover?.();
-        this.enableEventMap();
-        this.axis = null;
-      }
-      return;
-    }
     const gizmo = (this as any)._gizmo;
     const intersect = this.intersectObjectWithRay(gizmo.picker[this.mode], this.getRaycaster());
     if (intersect) {
@@ -134,16 +125,6 @@ export class MaplibreTransformControls extends TransformControls {
   pointerDown(pointer: any): void {
     if (this.object === undefined || this.dragging === true || (pointer != null && pointer.button !== 0)) {
       return;
-    }
-    if (this.useBoxTranslate && this.axis === null && pointer !== null && this.boxPickTarget) {
-      const raycaster = this.getRaycaster();
-      const ndc = new THREE.Vector2(pointer.x, pointer.y);
-      if (this.updateRayCast(ndc, raycaster)) {
-        const intersect = this.intersectObjectWithRay(this.boxPickTarget, this.getRaycaster(), true);
-        if (intersect) {
-          this.axis = "XYZ";
-        }
-      }
     }
     if (this.axis !== null && pointer !== null) {
       const raycaster = this.getRaycaster();
@@ -357,5 +338,77 @@ export class MaplibreTransformControls extends TransformControls {
       clientX: event.clientX,
       clientY: event.clientY,
     };
+  }
+
+  private styleHandle(handle: THREE.Object3D, activeAxis: string | null, isDarkTheme: boolean): void {
+    const axisName = this.getAxisFromHandleName(handle.name);
+    const isActive = Boolean(activeAxis) && handle.name.includes(activeAxis as string);
+    const baseColor = MaplibreTransformControls.AXIS_COLORS[axisName] ?? "#94a3b8";
+    const activeColor = isDarkTheme ? "#f8fafc" : "#0f172a";
+    const color = new THREE.Color(isActive ? activeColor : baseColor);
+    const isPlane = axisName === "XY" || axisName === "YZ" || axisName === "XZ";
+    const baseOpacity = isPlane ? 0.32 : axisName === "XYZ" || axisName === "XYZE" ? 0.88 : 0.8;
+    const opacity = isActive ? (isPlane ? 0.6 : 0.98) : baseOpacity;
+    const shapeScale = isPlane ? 0.72 : axisName === "XYZ" || axisName === "XYZE" ? 0.9 : 1;
+
+    handle.traverse((child) => {
+      this.applyShapeScale(child as THREE.Object3D, shapeScale);
+      const material = (child as THREE.Mesh).material;
+      if (!material) {
+        return;
+      }
+      if (Array.isArray(material)) {
+        material.forEach((mat) => this.applyMaterialStyle(mat, color, opacity));
+      } else {
+        this.applyMaterialStyle(material, color, opacity);
+      }
+    });
+  }
+
+  private applyMaterialStyle(material: THREE.Material, color: THREE.Color, opacity: number): void {
+    const matAny = material as THREE.Material & { color?: THREE.Color; opacity?: number; transparent?: boolean; depthTest?: boolean };
+    if (matAny.color) {
+      matAny.color.copy(color);
+    }
+    if (typeof matAny.opacity === "number") {
+      matAny.opacity = opacity;
+    }
+    matAny.transparent = true;
+    matAny.depthTest = true;
+    material.needsUpdate = true;
+  }
+
+  private getAxisFromHandleName(name: string): string {
+    if (!name) {
+      return "XYZ";
+    }
+    if (name.includes("XYZ")) return "XYZ";
+    if (name.includes("XYZE")) return "XYZE";
+    if (name.includes("XY")) return "XY";
+    if (name.includes("YZ")) return "YZ";
+    if (name.includes("XZ")) return "XZ";
+    if (name.includes("X")) return "X";
+    if (name.includes("Y")) return "Y";
+    if (name.includes("Z")) return "Z";
+    if (name.includes("E")) return "E";
+    return "XYZ";
+  }
+
+  private isDarkTheme(): boolean {
+    if (typeof document === "undefined") {
+      return false;
+    }
+    return document.documentElement.classList.contains("theme-dark");
+  }
+
+  private applyShapeScale(object: THREE.Object3D, factor: number): void {
+    const anyObject = object as THREE.Object3D & {
+      userData: { __baseScale?: THREE.Vector3 };
+    };
+    if (!anyObject.userData.__baseScale) {
+      anyObject.userData.__baseScale = object.scale.clone();
+    }
+    const baseScale = anyObject.userData.__baseScale;
+    object.scale.set(baseScale.x * factor, baseScale.y * factor, baseScale.z * factor);
   }
 }

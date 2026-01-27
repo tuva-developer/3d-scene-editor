@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ThemeMode, TransformMode } from "@/types/common";
+import type { LayerOption, MapStyleOption, ThemeMode, TransformMode } from "@/types/common";
 
 interface Props {
   mode: TransformMode;
@@ -14,6 +14,12 @@ interface Props {
   onAddLayer: () => void;
   theme: ThemeMode;
   onToggleTheme: () => void;
+  styleOptions: MapStyleOption[];
+  styleId: string;
+  onChangeStyle: (styleId: string) => void;
+  layerOptions: LayerOption[];
+  activeLayerId: string;
+  onChangeActiveLayer: (layerId: string) => void;
 }
 
 export const EditorToolbar = ({
@@ -29,6 +35,12 @@ export const EditorToolbar = ({
   onAddLayer,
   theme,
   onToggleTheme,
+  styleOptions,
+  styleId,
+  onChangeStyle,
+  layerOptions,
+  activeLayerId,
+  onChangeActiveLayer,
 }: Props) => {
   const [clippingEnabled, setClippingEnabled] = useState(false);
   const [footprintEnabled, setFootprintEnabled] = useState(false);
@@ -47,13 +59,16 @@ export const EditorToolbar = ({
   const sectionsClassName = "flex flex-col gap-2.5";
   const sectionClassName = "flex flex-col gap-1.5";
   const sectionHeadingClassName = "px-0.5 text-[11px] font-semibold text-[var(--section-heading)]";
-  const sectionBodyClassName = "flex flex-wrap items-center gap-1.5";
+  const sectionBodyClassName = "flex items-center gap-1.5";
+  const sectionBodyColumnClassName = "flex flex-col gap-1.5";
   const sectionActionsClassName = "flex flex-none items-center gap-1.5";
   const toolGridClassName = "grid w-full grid-cols-2 gap-1.5";
+  const selectClassName =
+    "h-9 w-full rounded-md border border-[var(--btn-border)] bg-[var(--btn-bg)] px-2.5 text-[13px] font-medium text-[var(--text)] outline-none transition focus:border-[var(--btn-active-border)] focus:ring-2 focus:ring-[color:var(--focus-ring)]/40";
   const segmentedClassName =
-    "inline-flex overflow-hidden rounded-[7px] border border-[var(--seg-border)] bg-[var(--seg-bg)]";
+    "inline-flex items-center gap-0.5 rounded-[8px] border border-[var(--seg-border)] bg-[var(--seg-bg)] p-[3px]";
   const segmentedButtonBaseClassName =
-    "flex h-10 w-11 flex-none items-center justify-center border-l border-[var(--seg-divider)] text-[15px] text-[var(--text)] transition first:border-l-0 hover:bg-[var(--seg-hover)]";
+    "flex h-9 w-10 flex-none items-center justify-center rounded-md text-[14px] text-[var(--text)] transition hover:bg-[var(--seg-hover)]";
   const segmentedButtonActiveClassName =
     "bg-[var(--btn-active-bg)] text-[var(--btn-active-text)] shadow-[var(--btn-active-ring)]";
   const buttonBaseClassName =
@@ -91,6 +106,27 @@ export const EditorToolbar = ({
       </div>
 
       <div className={sectionsClassName}>
+        <section className={sectionClassName} aria-label="Map style">
+          <div className={sectionHeadingClassName}>Style</div>
+          <div className={sectionBodyClassName}>
+            <label className="sr-only" htmlFor="map-style-select">
+              Map style
+            </label>
+            <select
+              id="map-style-select"
+              className={selectClassName}
+              value={styleId}
+              onChange={(event) => onChangeStyle(event.target.value)}
+            >
+              {styleOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </section>
+
         <section className={sectionClassName} aria-label="Transform tools">
           <div className={sectionHeadingClassName}>Transform</div>
           <div className={sectionBodyClassName}>
@@ -105,17 +141,6 @@ export const EditorToolbar = ({
               >
                 <i className="fa-solid fa-up-down-left-right" />
                 <span className={srOnlyClassName}>Move</span>
-              </button>
-              <button
-                className={`${segmentedButtonBaseClassName} ${mode === "translate-box" ? segmentedButtonActiveClassName : ""}`}
-                onClick={() => onChange("translate-box")}
-                title="Box Move"
-                aria-label="Box Move"
-                role="radio"
-                aria-checked={mode === "translate-box"}
-              >
-                <i className="fa-solid fa-cube" />
-                <span className={srOnlyClassName}>Box Move</span>
               </button>
               <button
                 className={`${segmentedButtonBaseClassName} ${mode === "rotate" ? segmentedButtonActiveClassName : ""}`}
@@ -202,11 +227,27 @@ export const EditorToolbar = ({
           </div>
         </section>
 
-        <div className="my-0.5 h-px w-full bg-[var(--divider)]" />
+        <div className="my-0.5 h-px w-full bg-(--divider)" />
 
         <section className={sectionClassName} aria-label="Layer tools">
           <div className={sectionHeadingClassName}>Layer</div>
-          <div className={sectionBodyClassName}>
+          <div className={sectionBodyColumnClassName}>
+            <label className="sr-only" htmlFor="layer-select">
+              Active layer
+            </label>
+            <select
+              id="layer-select"
+              className={selectClassName}
+              value={activeLayerId}
+              onChange={(event) => onChangeActiveLayer(event.target.value)}
+            >
+              {layerOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+
             <button
               className={`${buttonBaseClassName} ${buttonStandardClassName}`}
               onClick={onAddLayer}
