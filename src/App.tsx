@@ -147,6 +147,13 @@ function App() {
   }, [currentStyle.id]);
 
   useEffect(() => {
+    if (!hasSelection) {
+      return;
+    }
+    mapHandleRef.current?.setTransformMode(mode);
+  }, [hasSelection, mode]);
+
+  useEffect(() => {
     window.localStorage.setItem("scene-editor-active-layer", activeLayerId);
     setHasSelection(false);
     setHasChanges(false);
