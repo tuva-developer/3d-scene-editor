@@ -42,9 +42,18 @@ function getSunPosition(lat: number, lon: number) {
 }
 
 function addControlMaplibre(map: maplibregl.Map): void {
-  map.addControl(new maplibregl.NavigationControl(), "top-right");
-  map.addControl(new maplibregl.FullscreenControl(), "top-right");
+  map.addControl(new maplibregl.NavigationControl(), "bottom-right");
+  map.addControl(new maplibregl.FullscreenControl(), "bottom-right");
   map.addControl(new maplibregl.ScaleControl(), "bottom-left");
+}
+
+function generateId(): string {
+  const cryptoObj = globalThis.crypto as Crypto | undefined;
+  if (cryptoObj?.randomUUID) {
+    return cryptoObj.randomUUID();
+  }
+  const rand = Math.random().toString(36).slice(2, 10);
+  return `layer-${Date.now().toString(36)}-${rand}`;
 }
 
 const MapView = forwardRef<MapViewHandle, MapViewProps>(
@@ -327,7 +336,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
       if (!mainMap || !overlayLayer || !outlineLayer) {
         return null;
       }
-      const id = crypto.randomUUID();
+      const id = generateId();
       const layerName = options?.name?.trim() ? options.name.trim() : `Edit Layer ${id.slice(0, 6)}`;
       const centerPoint = mainMap.getCenter();
       const sunPos = getSunPosition(centerPoint.lat, centerPoint.lng);
@@ -359,7 +368,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
         },
       });
       editorLayer.setSunPos(sunPos.altitude, sunPos.azimuth);
-      const defaultGlbPath = (import.meta.env.VITE_EDIT_MODEL_URL as string | undefined)?.trim() || "/test_data/test.glb";
+      const defaultGlbPath = (import.meta.env.VITE_EDIT_MODEL_URL as string | undefined)?.trim() || "/models/default.glb";
       const glbPath = options?.modelUrl?.trim() || defaultGlbPath;
       const isBlobUrl = glbPath.startsWith("blob:");
       loadModelFromGlb(glbPath)

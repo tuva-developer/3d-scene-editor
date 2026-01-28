@@ -17,9 +17,10 @@ export class MaplibreTransformControls extends TransformControls {
     XY: "#eab308",
     YZ: "#14b8a6",
     XZ: "#a855f7",
-    XYZ: "#f8fafc",
-    XYZE: "#f8fafc",
+    XYZ: "#38bdf8",
+    XYZE: "#38bdf8",
   };
+  private static readonly HOVER_ACTIVE_COLOR = "#00d4ff";
   private map: any;
   private currentTile: any;
   private applyGlobeMatrix: boolean;
@@ -342,17 +343,21 @@ export class MaplibreTransformControls extends TransformControls {
 
   private styleHandle(handle: THREE.Object3D, activeAxis: string | null, isDarkTheme: boolean): void {
     const axisName = this.getAxisFromHandleName(handle.name);
-    const isActive = Boolean(activeAxis) && handle.name.includes(activeAxis as string);
+    const highlightAll = this.mode === "translate" && activeAxis === "XYZ";
+    const isActive = highlightAll || (Boolean(activeAxis) && axisName === activeAxis);
     const baseColor = MaplibreTransformControls.AXIS_COLORS[axisName] ?? "#94a3b8";
-    const activeColor = isDarkTheme ? "#f8fafc" : "#0f172a";
-    const color = new THREE.Color(isActive ? activeColor : baseColor);
+    const color = new THREE.Color(isActive ? MaplibreTransformControls.HOVER_ACTIVE_COLOR : baseColor);
     const isPlane = axisName === "XY" || axisName === "YZ" || axisName === "XZ";
-    const baseOpacity = isPlane ? 0.32 : axisName === "XYZ" || axisName === "XYZE" ? 0.88 : 0.8;
-    const opacity = isActive ? (isPlane ? 0.6 : 0.98) : baseOpacity;
+    const isArrowAxis = axisName === "X" || axisName === "Y" || axisName === "Z";
+    const isCenterHandle = axisName === "XYZ" || axisName === "XYZE";
+    const baseOpacity = isPlane ? 0.24 : isCenterHandle ? 0.4 : 0.64;
+    const opacity = isArrowAxis ? 1 : isActive ? (isPlane ? 0.44 : isCenterHandle ? 0.7 : 0.92) : baseOpacity;
     const shapeScale = isPlane ? 0.72 : axisName === "XYZ" || axisName === "XYZE" ? 0.9 : 1;
 
+    handle.renderOrder = 10000;
     handle.traverse((child) => {
       this.applyShapeScale(child as THREE.Object3D, shapeScale);
+      child.renderOrder = 10000;
       const material = (child as THREE.Mesh).material;
       if (!material) {
         return;
@@ -374,7 +379,8 @@ export class MaplibreTransformControls extends TransformControls {
       matAny.opacity = opacity;
     }
     matAny.transparent = true;
-    matAny.depthTest = true;
+    matAny.depthTest = false;
+    (matAny as THREE.Material & { depthWrite?: boolean }).depthWrite = false;
     material.needsUpdate = true;
   }
 

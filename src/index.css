@@ -111,6 +111,11 @@ html, body, #root {
   right: 16px;
 }
 
+.maplibregl-ctrl-bottom-right {
+  bottom: 16px;
+  right: 16px;
+}
+
 .maplibregl-ctrl-group {
   background: var(--map-ctrl-bg);
   border: 1px solid var(--map-ctrl-border);

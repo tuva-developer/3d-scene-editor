@@ -73,20 +73,20 @@ function App() {
   const [layerModalInitialName, setLayerModalInitialName] = useState("Edit Layer 1");
   const [styleId, setStyleId] = useState<string>(() => {
     if (typeof window === "undefined") {
-      return envStylePath ? "env-custom" : "openfreemap-liberty";
+      return "carto-positron";
     }
     const stored = window.localStorage.getItem("scene-editor-style-id");
     if (stored) {
       return stored;
     }
-    return envStylePath ? "env-custom" : "openfreemap-liberty";
+    return "carto-positron";
   });
   const [theme, setTheme] = useState<ThemeMode>(() => {
     if (typeof window === "undefined") {
-      return "light";
+      return "dark";
     }
     const stored = window.localStorage.getItem("scene-editor-theme");
-    return stored === "dark" ? "dark" : "light";
+    return stored === "light" ? "light" : "dark";
   });
   const mapHandleRef = useRef<MapViewHandle>(null);
   const mapCenter = useMemo(() => [106.6297, 10.8231] as [number, number], []);
