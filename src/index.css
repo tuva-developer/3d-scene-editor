@@ -40,6 +40,18 @@
   --map-scale-border: rgba(15, 23, 42, 0.16);
   --map-scale-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
   --map-scale-text: #111827;
+  --timebar-bg: rgba(17, 24, 39, 0.9);
+  --timebar-border: rgba(15, 23, 42, 0.28);
+  --timebar-shadow: 0 12px 26px rgba(15, 23, 42, 0.22);
+  --timebar-text: #f8fafc;
+  --timebar-muted: rgba(248, 250, 252, 0.7);
+  --timebar-height: 82px;
+  --timebar-track: rgba(255, 255, 255, 0.18);
+  --timebar-fill: #f59e0b;
+  --timebar-thumb: #fef3c7;
+  --timebar-pill-bg: rgba(255, 255, 255, 0.06);
+  --timebar-pill-border: rgba(255, 255, 255, 0.12);
+  --timebar-accent: #fbbf24;
   background: var(--app-bg);
 }
 
@@ -81,6 +93,18 @@
   --map-scale-border: rgba(255, 255, 255, 0.18);
   --map-scale-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
   --map-scale-text: #f2f4f5;
+  --timebar-bg: rgba(17, 22, 28, 0.94);
+  --timebar-border: rgba(255, 255, 255, 0.08);
+  --timebar-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+  --timebar-text: #f8fafc;
+  --timebar-muted: rgba(248, 250, 252, 0.7);
+  --timebar-height: 82px;
+  --timebar-track: rgba(255, 255, 255, 0.16);
+  --timebar-fill: #f59e0b;
+  --timebar-thumb: #fef3c7;
+  --timebar-pill-bg: rgba(255, 255, 255, 0.08);
+  --timebar-pill-border: rgba(255, 255, 255, 0.14);
+  --timebar-accent: #fbbf24;
 }
 
 * {
@@ -160,6 +184,43 @@ html, body, #root {
   border-radius: 10px;
   padding: 6px 8px;
   backdrop-filter: blur(8px);
+}
+
+.time-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 999px;
+  outline: none;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.time-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--timebar-thumb);
+  border: 2px solid rgba(15, 23, 42, 0.4);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+}
+
+.time-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--timebar-thumb);
+  border: 2px solid rgba(15, 23, 42, 0.4);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+}
+
+.time-slider::-moz-range-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--timebar-track);
 }
 
 .layer-panel-scroll {

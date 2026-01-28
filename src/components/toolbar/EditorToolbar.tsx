@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBorderAll, faCircleHalfStroke, faLayerGroup, faLocationDot } from "@fortawesome/free-solid-svg-icons";
+import { faBorderAll, faCircleHalfStroke, faClock, faLayerGroup, faLocationDot } from "@fortawesome/free-solid-svg-icons";
 import type { MapStyleOption, ThemeMode } from "@/types/common";
 
 type FlyToState = {
@@ -21,6 +21,8 @@ interface Props {
   onChangeStyle: (styleId: string) => void;
   onFlyTo: (lat: number, lng: number, zoom?: number) => void;
   defaultZoom: number;
+  showShadowTime: boolean;
+  onToggleShadowTime: () => void;
 }
 
 function clampTextValue(value: string): string {
@@ -38,6 +40,8 @@ export const EditorToolbar = ({
   onChangeStyle,
   onFlyTo,
   defaultZoom,
+  showShadowTime,
+  onToggleShadowTime,
 }: Props) => {
   const [flyTo, setFlyTo] = useState<FlyToState>({
     open: false,
@@ -50,6 +54,7 @@ export const EditorToolbar = ({
     "absolute left-4 top-3 z-[2000] inline-flex max-w-[calc(100%-2rem)] flex-wrap items-center gap-2 rounded-lg border border-[var(--panel-border)] bg-[var(--panel-bg)] px-3 py-2 text-[var(--text)] shadow-[var(--panel-shadow)]";
   const titleClassName = "text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]";
   const groupClassName = "flex items-center gap-2 border-r border-[var(--divider)] pr-2";
+  const logoClassName = "h-6 w-6 rounded-md border border-[var(--btn-border)] bg-[var(--btn-bg)] p-1";
   const groupLastClassName = "flex items-center gap-2";
   const labelClassName = "text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]";
   const selectClassName =
@@ -95,6 +100,7 @@ export const EditorToolbar = ({
     <>
       <div className={barClassName}>
         <div className={groupClassName}>
+          <img src="/logo-64.svg" alt="3D Scene Editor" className={logoClassName} />
           <div className={titleClassName}>Scene Editor</div>
         </div>
 
@@ -141,6 +147,15 @@ export const EditorToolbar = ({
             type="button"
           >
             <FontAwesomeIcon icon={faBorderAll} />
+          </button>
+          <button
+            className={`${buttonBaseClassName} ${buttonIconClassName} ${showShadowTime ? buttonActiveClassName : ""}`}
+            onClick={onToggleShadowTime}
+            title={showShadowTime ? "Hide shadow time" : "Show shadow time"}
+            aria-label={showShadowTime ? "Hide shadow time" : "Show shadow time"}
+            type="button"
+          >
+            <FontAwesomeIcon icon={faClock} />
           </button>
         </div>
 

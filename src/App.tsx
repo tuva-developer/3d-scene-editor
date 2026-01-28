@@ -3,6 +3,7 @@ import MapView from "@/components/map/MapView";
 import { EditorToolbar } from "@/components/toolbar/EditorToolbar";
 import LayerPanel from "@/components/ui/LayerPanel";
 import LayerNameModal from "@/components/ui/LayerNameModal";
+import TimeShadowBar from "@/components/ui/TimeShadowBar";
 import TransformPanel from "@/components/ui/TransformPanel";
 import type { LayerOption, MapStyleOption, ThemeMode, TransformMode, TransformValues } from "@/types/common";
 import type { MapViewHandle } from "@/components/map/MapView";
@@ -75,6 +76,15 @@ function App() {
   const [layerModalOpen, setLayerModalOpen] = useState(false);
   const [layerModalInitialName, setLayerModalInitialName] = useState("Edit Layer 1");
   const [isLayerPanelOpen, setIsLayerPanelOpen] = useState(true);
+  const [sunMinutes, setSunMinutes] = useState(() => {
+    const now = new Date();
+    return now.getHours() * 60 + now.getMinutes();
+  });
+  const [sunDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  });
+  const [showShadowTime, setShowShadowTime] = useState(true);
   const [transformValues, setTransformValues] = useState<TransformValues | null>(null);
   const [styleId, setStyleId] = useState<string>(() => {
     if (typeof window === "undefined") {
@@ -200,24 +210,42 @@ function App() {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden">
-      <MapView
-        center={mapCenter}
-        zoom={16}
-        styleUrl={styleUrl}
-        activeLayerId={activeLayerId}
-        ref={mapHandleRef}
-        showTileBoundaries={showTiles}
-        onSelectionChange={(selected) => {
-          setHasSelection(selected);
-          if (!selected) {
-            setHasChanges(false);
-            setSelectionElevation(null);
-          }
-        }}
-        onSelectionElevationChange={setSelectionElevation}
-        onTransformDirtyChange={setHasChanges}
-        onLayerOptionsChange={setLayerOptions}
-      />
+      <div
+        className="absolute inset-0"
+        style={{ paddingBottom: showShadowTime ? "var(--timebar-height)" : "0px" }}
+      >
+        <MapView
+          center={mapCenter}
+          zoom={16}
+          styleUrl={styleUrl}
+          activeLayerId={activeLayerId}
+          ref={mapHandleRef}
+          showTileBoundaries={showTiles}
+          onSelectionChange={(selected) => {
+            setHasSelection(selected);
+            if (!selected) {
+              setHasChanges(false);
+              setSelectionElevation(null);
+            }
+          }}
+          onSelectionElevationChange={setSelectionElevation}
+          onTransformDirtyChange={setHasChanges}
+          onLayerOptionsChange={setLayerOptions}
+        />
+      </div>
+      {showShadowTime ? (
+        <TimeShadowBar
+          minutes={sunMinutes}
+          date={sunDate}
+          onChange={(minutes) => {
+            setSunMinutes(minutes);
+            const next = new Date(sunDate);
+            next.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+            mapHandleRef.current?.setSunTime(next);
+          }}
+          onClose={() => setShowShadowTime(false)}
+        />
+      ) : null}
       <LayerPanel
         layers={layerOptions}
         activeLayerId={activeLayerId}
@@ -316,6 +344,8 @@ function App() {
         onFlyTo={(lat, lng, zoom) => {
           mapHandleRef.current?.flyToLatLng(lat, lng, zoom);
         }}
+        showShadowTime={showShadowTime}
+        onToggleShadowTime={() => setShowShadowTime((prev) => !prev)}
       />
       <LayerNameModal
         open={layerModalOpen}

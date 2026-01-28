@@ -11,8 +11,11 @@ export function calculateSunDirectionMaplibre(altitude: number, azimuth: number)
 }
 
 export function getSunPosition(lat: number, lon: number) {
-  const now = new Date();
-  const sunPos = SunCalc.getPosition(now, lat, lon);
+  return getSunPositionAt(lat, lon, new Date());
+}
+
+export function getSunPositionAt(lat: number, lon: number, date: Date) {
+  const sunPos = SunCalc.getPosition(date, lat, lon);
   return {
     altitude: sunPos.altitude * (180 / Math.PI),
     azimuth: sunPos.azimuth * (180 / Math.PI) + 180,

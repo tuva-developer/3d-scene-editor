@@ -104,7 +104,7 @@ export default function TransformPanel({
   ];
 
   const panelClassName =
-    "absolute right-4 top-16 z-[2000] w-[260px] rounded-lg border border-[var(--panel-border)] bg-[var(--panel-bg)] text-[var(--text)] shadow-[var(--panel-shadow)]";
+    "absolute right-4 top-3 z-[2000] w-[260px] rounded-lg border border-[var(--panel-border)] bg-[var(--panel-bg)] text-[var(--text)] shadow-[var(--panel-shadow)]";
   const headerClassName = "flex items-center justify-between border-b border-[var(--divider)] px-3 py-2";
   const titleClassName = "text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]";
   const titleDisabledClassName = "text-[var(--btn-danger-text)]/70";
@@ -116,10 +116,6 @@ export default function TransformPanel({
   const inputClassName =
     "h-7 w-full rounded-md border border-[var(--btn-border)] bg-[var(--btn-bg)] px-2 text-[11px] text-[var(--text)] outline-none transition focus:border-[var(--btn-active-border)] focus:ring-2 focus:ring-[color:var(--focus-ring)]/30 disabled:cursor-not-allowed disabled:opacity-50";
   const unitClassName = "ml-1 text-[10px] text-[var(--text-muted)]";
-  const dividerClassName = "h-px w-full bg-[var(--divider)]";
-  const modeRowClassName = "grid grid-cols-[70px_1fr] items-center gap-2";
-  const selectClassName =
-    "h-7 w-full rounded-md border border-[var(--btn-border)] bg-[var(--btn-bg)] px-2 text-[11px] text-[var(--text)] outline-none transition focus:border-[var(--btn-active-border)] focus:ring-2 focus:ring-[color:var(--focus-ring)]/30 disabled:cursor-not-allowed disabled:opacity-50";
   const segmentedClassName =
     "inline-flex items-center gap-0.5 rounded-[8px] border border-[var(--seg-border)] bg-[var(--seg-bg)] p-[3px]";
   const segmentedButtonBaseClassName =
@@ -326,13 +322,6 @@ export default function TransformPanel({
               </div>
             </div>
           ))}
-          <div className={dividerClassName} />
-          <div className={modeRowClassName}>
-            <div className={labelClassName}>Mode</div>
-            <select className={selectClassName} disabled>
-              <option>XYZ Euler</option>
-            </select>
-          </div>
         </div>
       )}
     </div>

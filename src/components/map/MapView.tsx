@@ -7,7 +7,7 @@ import OutlineLayer from "@/components/map/layers/OutlineLayer";
 import { EditLayer } from "@/components/map/layers/EditLayer";
 import type { LayerOption, TransformMode, TransformValues } from "@/types/common";
 import { loadModelFromGlb } from "@/components/map/data/models/objModel";
-import { getSunPosition } from "@/components/map/shadow/ShadowHelper";
+import { getSunPosition, getSunPositionAt } from "@/components/map/shadow/ShadowHelper";
 import { MathUtils } from "three";
 
 interface MapViewProps {
@@ -35,6 +35,7 @@ export interface MapViewHandle {
   flyToLatLng(lat: number, lng: number, zoom?: number): void;
   setLayerVisibility(id: string, visible: boolean): void;
   removeLayer(id: string): void;
+  setSunTime(date: Date): void;
 }
 
 function addControlMaplibre(map: maplibregl.Map): void {
@@ -77,6 +78,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
     const styleUrlRef = useRef<string | null>(null);
     const activeLayerIdRef = useRef<string | undefined>(activeLayerId);
     const showTileBoundariesRef = useRef<boolean>(showTileBoundaries);
+    const sunTimeRef = useRef<Date | null>(null);
     const onSelectionChangeRef = useRef<typeof onSelectionChange>(onSelectionChange);
     const onSelectionElevationChangeRef = useRef<typeof onSelectionElevationChange>(onSelectionElevationChange);
     const onTransformDirtyChangeRef = useRef<typeof onTransformDirtyChange>(onTransformDirtyChange);
@@ -427,7 +429,8 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
         const centerPoint = mainMap.getCenter();
         const lat = options?.coords?.lat ?? centerPoint.lat;
         const lng = options?.coords?.lng ?? centerPoint.lng;
-        const sunPos = getSunPosition(lat, lng);
+        const sunTime = sunTimeRef.current ?? new Date();
+        const sunPos = getSunPositionAt(lat, lng, sunTime);
         const sunOptions = {
           shadow: true,
           altitude: sunPos.altitude,
@@ -491,9 +494,23 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
         ]);
         return id;
       },
+      setSunTime(date) {
+        const mainMap = map.current;
+        if (!mainMap) {
+          return;
+        }
+        sunTimeRef.current = date;
+        const centerPoint = mainMap.getCenter();
+        const sunPos = getSunPositionAt(centerPoint.lat, centerPoint.lng, date);
+        modelLayerRef.current?.setSunPos(sunPos.altitude, sunPos.azimuth);
+        editLayersRef.current.forEach((entry) => {
+          entry.layer.setSunPos(sunPos.altitude, sunPos.azimuth);
+        });
+        mainMap.triggerRepaint();
+      },
     }));
 
-    return <div ref={mapContainer} className="absolute inset-0 h-full w-full" />;
+    return <div ref={mapContainer} className="h-full w-full" />;
   }
 );
 
