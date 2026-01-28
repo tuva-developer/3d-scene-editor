@@ -37,7 +37,9 @@ export default function TimeShadowBar({ minutes, date, onChange, onClose }: Time
   const dateLabel = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 z-[2100] flex flex-col gap-2 border-t border-[var(--timebar-border)] bg-[var(--timebar-bg)] px-4 py-2 text-[var(--timebar-text)] shadow-[var(--timebar-shadow)]">
+    <div
+      className="absolute bottom-4 left-1/2 z-[2100] flex w-[min(980px,calc(100%-160px))] -translate-x-1/2 flex-col gap-2 rounded-xl border border-[var(--timebar-border)] bg-[var(--timebar-bg)] px-4 py-2 text-[var(--timebar-text)] shadow-[var(--timebar-shadow)]"
+    >
       <div className="flex items-center justify-between">
         <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--timebar-muted)]">
           Shadow Time
