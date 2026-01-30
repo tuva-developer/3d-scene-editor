@@ -262,10 +262,10 @@ export default function TransformPanel({
             <div className={sectionTitleClassName}>Transform</div>
             <div className="mt-2 flex items-center gap-2">
               <div
-                className="flex flex-1 items-center justify-between rounded-lg border border-[var(--seg-border)] bg-[var(--seg-bg)] px-2 py-1.5"
+                className="flex flex-1 items-center justify-between rounded-lg border border-(--seg-border) bg-(--seg-bg) px-2 py-1.5"
               >
                 <div className="flex items-center gap-2" role="radiogroup" aria-label="Transform mode">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-(--text-muted)">
                     Mode
                   </span>
                   <div className={segmentedClassName}>
@@ -306,7 +306,7 @@ export default function TransformPanel({
                     </button>
                   </div>
                 </div>
-                <div className="h-6 w-px bg-[var(--seg-border)]" />
+                <div className="h-6 w-px bg-(--seg-border)" />
                 <button
                   className={`${buttonBaseClassName} ${buttonCompactClassName} ${buttonDangerClassName}`}
                   onClick={() => onChangeMode("reset")}
@@ -364,7 +364,7 @@ export default function TransformPanel({
                 <div className="mt-2 grid gap-2">
                   <label className="flex items-center gap-2">
                     <input
-                      className="h-2 w-full accent-[var(--btn-active-bg)]"
+                      className="h-2 w-full accent-(--btn-active-bg)"
                       type="range"
                       min={scaleRange.min}
                       max={scaleRange.max}
@@ -405,7 +405,7 @@ export default function TransformPanel({
                       const fieldKey = `${group.key}-${axis}`;
                       return (
                         <label key={fieldKey} className={axisGridClassName}>
-                          <span className="text-[10px] font-semibold text-[var(--text-muted)]">{axis}</span>
+                          <span className="text-[10px] font-semibold text-(--text-muted)">{axis}</span>
                           <div className="flex items-center">
                             <input
                               className={inputClassName}
@@ -445,7 +445,7 @@ export default function TransformPanel({
                     const fieldKey = `${group.key}-${axis}`;
                     return (
                       <label key={fieldKey} className={axisGridClassName}>
-                        <span className="text-[10px] font-semibold text-[var(--text-muted)]">{axis}</span>
+                        <span className="text-[10px] font-semibold text-(--text-muted)">{axis}</span>
                         <div className="flex items-center">
                           <input
                             className={inputClassName}

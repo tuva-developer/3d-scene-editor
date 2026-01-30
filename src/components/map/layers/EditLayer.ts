@@ -3,8 +3,16 @@ import type { CustomLayerInterface } from "maplibre-gl";
 import * as THREE from "three";
 import { MaplibreShadowMesh } from "@/components/map/shadow/ShadowGeometry";
 import { calculateSunDirectionMaplibre } from "@/components/map/shadow/ShadowHelper";
-import { createLightGroup, prepareModelForRender, transformModel } from "@/components/map/data/models/objModel";
-import { getMetersPerExtentUnit, latlonToLocal, clampZoom } from "@/components/map/data/convert/coords";
+import {
+  createLightGroup,
+  prepareModelForRender,
+  transformModel,
+} from "@/components/map/data/models/objModel";
+import {
+  getMetersPerExtentUnit,
+  latlonToLocal,
+  clampZoom,
+} from "@/components/map/data/convert/coords";
 import type { ModelData } from "@/components/map/data/types";
 
 export type SunOptions = {
@@ -75,14 +83,21 @@ export class EditLayer implements CustomLayerInterface {
   private visible = true;
   private raycaster = new THREE.Raycaster();
   private modelCache: Map<string, ModelData> = new Map<string, ModelData>();
-  private tileCache: Map<string, DataTileInfoForEditorLayer> = new Map<string, DataTileInfoForEditorLayer>();
+  private tileCache: Map<string, DataTileInfoForEditorLayer> = new Map<
+    string,
+    DataTileInfoForEditorLayer
+  >();
   private applyGlobeMatrix = false;
   private onPick?: (info: PickHit) => void;
   private onPickFail?: () => void;
   private pickEnabled = true;
   private clock: THREE.Clock | null = null;
 
-  constructor(opts: EditorLayerOpts & { onPick?: (info: PickHit) => void } & { onPickFail?: () => void }) {
+  constructor(
+    opts: EditorLayerOpts & { onPick?: (info: PickHit) => void } & {
+      onPickFail?: () => void;
+    },
+  ) {
     this.id = opts.id;
     this.editorLevel = opts.editorLevel;
     this.applyGlobeMatrix = opts.applyGlobeMatrix;
@@ -94,7 +109,7 @@ export class EditLayer implements CustomLayerInterface {
         azimuth: opts.sun.azimuth,
         sunDir: calculateSunDirectionMaplibre(
           THREE.MathUtils.degToRad(opts.sun.altitude),
-          THREE.MathUtils.degToRad(opts.sun.azimuth)
+          THREE.MathUtils.degToRad(opts.sun.azimuth),
         ),
         shadow: opts.sun.shadow,
       };
@@ -105,7 +120,10 @@ export class EditLayer implements CustomLayerInterface {
     this.sun = {
       altitude,
       azimuth,
-      sunDir: calculateSunDirectionMaplibre(THREE.MathUtils.degToRad(altitude), THREE.MathUtils.degToRad(azimuth)),
+      sunDir: calculateSunDirectionMaplibre(
+        THREE.MathUtils.degToRad(altitude),
+        THREE.MathUtils.degToRad(azimuth),
+      ),
       shadow,
     };
   }
@@ -152,7 +170,11 @@ export class EditLayer implements CustomLayerInterface {
     }
   }
 
-  addObjectToScene(id: string, defaultScale: number = 1, coords?: { lat: number; lng: number }): void {
+  addObjectToScene(
+    id: string,
+    defaultScale: number = 1,
+    coords?: { lat: number; lng: number },
+  ): void {
     if (!this.map) {
       return;
     }
@@ -175,7 +197,15 @@ export class EditLayer implements CustomLayerInterface {
     const bearing = 0;
     const objectScale = defaultScale;
     cloneObj3d.name = id;
-    transformModel(local.coordX, local.coordY, 0, bearing, objectScale, scaleUnit, cloneObj3d);
+    transformModel(
+      local.coordX,
+      local.coordY,
+      0,
+      bearing,
+      objectScale,
+      scaleUnit,
+      cloneObj3d,
+    );
     cloneObj3d.matrixAutoUpdate = false;
     cloneObj3d.updateMatrix();
     cloneObj3d.updateMatrixWorld(true);
@@ -234,7 +264,11 @@ export class EditLayer implements CustomLayerInterface {
       return;
     }
     this.renderer.clearStencil();
-    const zoom = clampZoom(this.editorLevel, this.editorLevel, Math.round(this.map.getZoom()));
+    const zoom = clampZoom(
+      this.editorLevel,
+      this.editorLevel,
+      Math.round(this.map.getZoom()),
+    );
     const visibleTiles = this.map.coveringTiles({
       tileSize: this.tileSize,
       minzoom: zoom,
@@ -267,13 +301,26 @@ export class EditLayer implements CustomLayerInterface {
   }
 
   private handleClick = (e: MapMouseEvent) => {
-    if (!this.map || !this.camera || !this.renderer || !this.visible || !this.pickEnabled) {
+    if (
+      !this.map ||
+      !this.camera ||
+      !this.renderer ||
+      !this.visible ||
+      !this.pickEnabled
+    ) {
       return;
     }
     const canvas = this.map.getCanvas();
     const rect = canvas.getBoundingClientRect();
-    const ndc = new THREE.Vector2((e.point.x / rect.width) * 2 - 1, -((e.point.y / rect.height) * 2 - 1));
-    const zoom = clampZoom(this.editorLevel, this.editorLevel, Math.round(this.map.getZoom()));
+    const ndc = new THREE.Vector2(
+      (e.point.x / rect.width) * 2 - 1,
+      -((e.point.y / rect.height) * 2 - 1),
+    );
+    const zoom = clampZoom(
+      this.editorLevel,
+      this.editorLevel,
+      Math.round(this.map.getZoom()),
+    );
     const visibleTiles = this.map.coveringTiles({
       tileSize: this.tileSize,
       minzoom: zoom,
@@ -285,10 +332,19 @@ export class EditLayer implements CustomLayerInterface {
       return;
     }
 
-    let bestHit: { dist: number; tileKey: string; overScaledTileID: OverscaledTileID; group: THREE.Object3D } | null = null;
+    let bestHit: {
+      dist: number;
+      tileKey: string;
+      overScaledTileID: OverscaledTileID;
+      group: THREE.Object3D;
+    } | null = null;
 
     for (const tid of visibleTiles) {
-      const key = this.tileKey(tid.canonical.x, tid.canonical.y, tid.canonical.z);
+      const key = this.tileKey(
+        tid.canonical.x,
+        tid.canonical.y,
+        tid.canonical.z,
+      );
       const tile = this.tileCache.get(key);
       if (!tile?.sceneTile) {
         continue;
@@ -307,11 +363,16 @@ export class EditLayer implements CustomLayerInterface {
       pFar.multiplyScalar(1 / pFar.w);
 
       const origin = new THREE.Vector3(pNear.x, pNear.y, pNear.z);
-      const direction = new THREE.Vector3(pFar.x, pFar.y, pFar.z).sub(origin).normalize();
+      const direction = new THREE.Vector3(pFar.x, pFar.y, pFar.z)
+        .sub(origin)
+        .normalize();
       this.raycaster.ray.origin.copy(origin);
       this.raycaster.ray.direction.copy(direction);
 
-      const hits = this.raycaster.intersectObjects(tile.sceneTile.children, true);
+      const hits = this.raycaster.intersectObjects(
+        tile.sceneTile.children,
+        true,
+      );
       if (hits.length) {
         const h0 = hits[0];
         let obj: THREE.Object3D | null = h0.object;
@@ -320,7 +381,12 @@ export class EditLayer implements CustomLayerInterface {
         }
         if (obj) {
           if (!bestHit || h0.distance < bestHit.dist) {
-            bestHit = { dist: h0.distance, tileKey: key, overScaledTileID: tid, group: obj };
+            bestHit = {
+              dist: h0.distance,
+              tileKey: key,
+              overScaledTileID: tid,
+              group: obj,
+            };
           }
         }
       }
@@ -349,7 +415,9 @@ export class EditLayer implements CustomLayerInterface {
     let tileData = this.tileCache.get(key);
     if (!tileData) {
       const scene = new THREE.Scene();
-      const dirLight = (this.sun?.sunDir ?? new THREE.Vector3(0.5, 0.5, 0.5)).clone().normalize();
+      const dirLight = (this.sun?.sunDir ?? new THREE.Vector3(0.5, 0.5, 0.5))
+        .clone()
+        .normalize();
       createLightGroup(scene, dirLight);
       tileData = {
         objects: [],
@@ -367,8 +435,11 @@ export class EditLayer implements CustomLayerInterface {
     }
     scene.traverse((child) => {
       if (child instanceof MaplibreShadowMesh) {
-        const shadowScaleZ = child.userData.scale_unit ?? child.userData.scaleUnit;
-        child.update(new THREE.Vector3(sunDir.x, sunDir.y, -sunDir.z / shadowScaleZ));
+        const shadowScaleZ =
+          child.userData.scale_unit ?? child.userData.scaleUnit;
+        child.update(
+          new THREE.Vector3(sunDir.x, sunDir.y, -sunDir.z / shadowScaleZ),
+        );
       }
     });
   }
