@@ -4,7 +4,6 @@ import {
   faBorderAll,
   faCircleHalfStroke,
   faClock,
-  faLayerGroup,
   faLocationDot,
 } from "@fortawesome/free-solid-svg-icons";
 import type { MapStyleOption, ThemeMode } from "@/types/common";
@@ -19,7 +18,6 @@ type FlyToState = {
 interface Props {
   showTiles: boolean;
   onToggleTiles: () => void;
-  onAddLayer: () => void;
   theme: ThemeMode;
   onToggleTheme: () => void;
   styleOptions: MapStyleOption[];
@@ -39,7 +37,6 @@ function clampTextValue(value: string): string {
 export const EditorToolbar = ({
   showTiles,
   onToggleTiles,
-  onAddLayer,
   theme,
   onToggleTheme,
   styleOptions,
@@ -64,9 +61,9 @@ export const EditorToolbar = ({
     "text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]";
   const groupClassName =
     "flex items-center gap-2 border-r border-[var(--divider)] pr-2";
+  const groupLastClassName = "flex items-center gap-2";
   const logoClassName =
     "h-6 w-6 rounded-md border border-[var(--btn-border)] bg-[var(--btn-bg)] p-1";
-  const groupLastClassName = "flex items-center gap-2";
   const mapControlsClassName =
     "maplibre-topbar-controls flex items-center gap-2";
   const labelClassName =
@@ -181,7 +178,7 @@ export const EditorToolbar = ({
           </button>
         </div>
 
-        <div className={groupClassName}>
+        <div className={groupLastClassName}>
           <span className={labelClassName}>View</span>
           <button
             className={`${buttonBaseClassName} ${buttonIconClassName} ${showTiles ? buttonActiveClassName : ""}`}
@@ -202,19 +199,6 @@ export const EditorToolbar = ({
             type="button"
           >
             <FontAwesomeIcon icon={faClock} />
-          </button>
-        </div>
-
-        <div className={groupLastClassName}>
-          <span className={labelClassName}>Layer</span>
-          <button
-            className={`${buttonBaseClassName} ${buttonIconClassName}`}
-            onClick={onAddLayer}
-            title="Add Edit Layer"
-            aria-label="Add Edit Layer"
-            type="button"
-          >
-            <FontAwesomeIcon icon={faLayerGroup} />
           </button>
         </div>
       </div>

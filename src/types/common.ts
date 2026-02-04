@@ -13,6 +13,12 @@ export type LayerOption = {
   label: string;
 };
 
+export type LayerModelInfo = {
+  id: string;
+  name: string;
+  coords?: { lat: number; lng: number } | null;
+};
+
 export type TransformValues = {
   position: [number, number, number];
   rotation: [number, number, number];

@@ -5,7 +5,7 @@ import LayerPanel from "@/components/ui/LayerPanel";
 import LayerNameModal from "@/components/ui/LayerNameModal";
 import TimeShadowBar from "@/components/ui/TimeShadowBar";
 import TransformPanel from "@/components/ui/TransformPanel";
-import type { LayerOption, MapStyleOption, ThemeMode, TransformMode, TransformValues } from "@/types/common";
+import type { LayerModelInfo, LayerOption, MapStyleOption, ThemeMode, TransformMode, TransformValues } from "@/types/common";
 import type { MapViewHandle } from "@/components/map/MapView";
 
 function App() {
@@ -67,7 +67,7 @@ function App() {
   const [selectionElevation, setSelectionElevation] = useState<number | null>(null);
   const [layerOptions, setLayerOptions] = useState<LayerOption[]>([{ id: "models", label: "Models (Base)" }]);
   const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>({ models: true });
-  const [layerLocations, setLayerLocations] = useState<Record<string, { lat: number; lng: number }>>({});
+  const [layerModels, setLayerModels] = useState<Record<string, LayerModelInfo[]>>({});
   const [activeLayerId, setActiveLayerId] = useState<string>(() => {
     if (typeof window === "undefined") {
       return "models";
@@ -76,6 +76,9 @@ function App() {
   });
   const [layerModalOpen, setLayerModalOpen] = useState(false);
   const [layerModalInitialName, setLayerModalInitialName] = useState("Edit Layer 1");
+  const [modelModalOpen, setModelModalOpen] = useState(false);
+  const [modelModalTargetId, setModelModalTargetId] = useState<string | null>(null);
+  const [modelModalTitle, setModelModalTitle] = useState("Add Model");
   const [isLayerPanelOpen, setIsLayerPanelOpen] = useState(true);
   const [sunMinutes, setSunMinutes] = useState(() => {
     const now = new Date();
@@ -110,6 +113,36 @@ function App() {
   const currentStyle = styleOptions.find((option) => option.id === styleId) ?? styleOptions[0];
   const styleUrl = currentStyle.url;
   const editLayerCount = layerOptions.filter((option) => option.id !== "models").length;
+  const defaultGlbPath = (import.meta.env.VITE_EDIT_MODEL_URL as string | undefined)?.trim() || "/models/default.glb";
+
+  const getModelName = (file: File | null, modelUrl?: string) => {
+    if (file?.name) {
+      return file.name;
+    }
+    if (modelUrl) {
+      const trimmed = modelUrl.split("?")[0];
+      const parts = trimmed.split("/");
+      return parts[parts.length - 1] || "model.glb";
+    }
+    const fallback = defaultGlbPath.split("?")[0];
+    const fallbackParts = fallback.split("/");
+    return fallbackParts[fallbackParts.length - 1] || "model.glb";
+  };
+
+  const createModelInfo = (
+    file: File | null,
+    modelUrl: string | undefined,
+    coords: { lat: number; lng: number } | null,
+    nameOverride?: string
+  ): LayerModelInfo => {
+    const cryptoObj = globalThis.crypto as Crypto | undefined;
+    const id = cryptoObj?.randomUUID ? cryptoObj.randomUUID() : `model-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    return {
+      id,
+      name: nameOverride ?? getModelName(file, modelUrl),
+      coords,
+    };
+  };
 
   useEffect(() => {
     const exists = layerOptions.some((option) => option.id === activeLayerId);
@@ -203,21 +236,57 @@ function App() {
     setLayerModalOpen(true);
   };
 
-  const handleConfirmLayerName = (name: string, file: File | null, coords: { lat: number; lng: number } | null) => {
+  const handleConfirmLayerName = (name: string, _file: File | null, coords: { lat: number; lng: number } | null) => {
     const nextName = name || layerModalInitialName;
-    const modelUrl = file ? URL.createObjectURL(file) : undefined;
     const fallbackCenter = mapHandleRef.current?.getCenter() ?? { lat: mapCenter[1], lng: mapCenter[0] };
     const targetCoords = coords ?? fallbackCenter;
-    const newLayerId =
-      mapHandleRef.current?.addEditLayer({ name: nextName, modelUrl, coords: targetCoords }) ?? null;
+    const newLayerId = mapHandleRef.current?.addEditLayer({ name: nextName, coords: targetCoords }) ?? null;
     if (newLayerId) {
       setActiveLayerId(newLayerId);
-      setLayerLocations((prev) => ({ ...prev, [newLayerId]: targetCoords }));
+      setLayerModels((prev) => ({ ...prev, [newLayerId]: [] }));
     }
     if (coords) {
       mapHandleRef.current?.flyToLatLng(coords.lat, coords.lng);
     }
     setLayerModalOpen(false);
+  };
+
+  const openModelModal = (layerId: string) => {
+    const targetLayer = layerOptions.find((option) => option.id === layerId);
+    setModelModalTargetId(layerId);
+    setModelModalTitle(targetLayer ? `Add Model to ${targetLayer.label}` : "Add Model");
+    setModelModalOpen(true);
+    setActiveLayerId(layerId);
+  };
+
+  const handleConfirmAddModel = (
+    layerId: string,
+    _name: string,
+    file: File | null,
+    coords: { lat: number; lng: number } | null
+  ) => {
+    const modelUrl = file ? URL.createObjectURL(file) : undefined;
+    const fallbackCenter = mapHandleRef.current?.getCenter() ?? { lat: mapCenter[1], lng: mapCenter[0] };
+    const targetCoords = coords ?? fallbackCenter;
+    const modelInfo = createModelInfo(file, modelUrl, targetCoords);
+    const added =
+      mapHandleRef.current?.addModelToLayer(layerId, {
+        modelUrl,
+        coords: targetCoords,
+        instanceId: modelInfo.id,
+        name: modelInfo.name,
+      }) ?? false;
+    if (added) {
+      setLayerModels((prev) => ({
+        ...prev,
+        [layerId]: [...(prev[layerId] ?? []), modelInfo],
+      }));
+      if (coords) {
+        mapHandleRef.current?.flyToLatLng(coords.lat, coords.lng);
+      }
+    }
+    setModelModalOpen(false);
+    setModelModalTargetId(null);
   };
 
   return (
@@ -262,14 +331,44 @@ function App() {
         layers={layerOptions}
         activeLayerId={activeLayerId}
         visibility={layerVisibility}
+        modelsByLayer={layerModels}
         onSelectLayer={setActiveLayerId}
         onToggleVisibility={(id, visible) => {
           setLayerVisibility((prev) => ({ ...prev, [id]: visible }));
           mapHandleRef.current?.setLayerVisibility(id, visible);
         }}
+        onAddModel={(id) => {
+          if (id === "models") {
+            return;
+          }
+          openModelModal(id);
+        }}
+        onCloneModel={(layerId, model) => {
+          const clonedName = `${model.name} Copy`;
+          const cloned = createModelInfo(null, undefined, model.coords ?? null, clonedName);
+          const clonedOk =
+            mapHandleRef.current?.cloneModelInLayer(layerId, model.id, cloned.id) ?? false;
+          if (!clonedOk) {
+            return;
+          }
+          setLayerModels((prev) => ({
+            ...prev,
+            [layerId]: [...(prev[layerId] ?? []), { ...cloned, coords: model.coords ?? null }],
+          }));
+        }}
+        onDeleteModel={(layerId, model) => {
+          const removed = mapHandleRef.current?.removeModelFromLayer(layerId, model.id) ?? false;
+          if (!removed) {
+            return;
+          }
+          setLayerModels((prev) => ({
+            ...prev,
+            [layerId]: (prev[layerId] ?? []).filter((entry) => entry.id !== model.id),
+          }));
+        }}
         onDeleteLayer={(id) => {
           mapHandleRef.current?.removeLayer(id);
-          setLayerLocations((prev) => {
+          setLayerModels((prev) => {
             if (!prev[id]) {
               return prev;
             }
@@ -278,11 +377,11 @@ function App() {
             return next;
           });
         }}
-        onJumpToLayer={(id) => {
-          const coords = layerLocations[id];
-          if (coords) {
-            mapHandleRef.current?.flyToLatLng(coords.lat, coords.lng, 20);
+        onJumpToModel={(model) => {
+          if (!model.coords) {
+            return;
           }
+          mapHandleRef.current?.flyToLatLng(model.coords.lat, model.coords.lng, 20);
         }}
         onShowAll={() => {
           setLayerVisibility((prev) => {
@@ -308,6 +407,7 @@ function App() {
             mapHandleRef.current?.setLayerVisibility(layer.id, false);
           });
         }}
+        onAddLayer={openLayerModal}
         isOpen={isLayerPanelOpen}
         onToggleOpen={() => setIsLayerPanelOpen((prev) => !prev)}
       />
@@ -355,9 +455,6 @@ function App() {
             return next;
           });
         }}
-        onAddLayer={() => {
-          openLayerModal();
-        }}
         theme={theme}
         onToggleTheme={() => {
           setTheme((current) => (current === "dark" ? "light" : "dark"));
@@ -380,6 +477,29 @@ function App() {
         onConfirm={handleConfirmLayerName}
         title="New Edit Layer"
         confirmLabel="Create Layer"
+        showModelInput={false}
+        showCoordsInput={false}
+      />
+      <LayerNameModal
+        open={modelModalOpen}
+        initialValue=""
+        onCancel={() => {
+          setModelModalOpen(false);
+          setModelModalTargetId(null);
+        }}
+        onConfirm={(name, file, coords) => {
+          if (!modelModalTargetId) {
+            setModelModalOpen(false);
+            return;
+          }
+          handleConfirmAddModel(modelModalTargetId, name, file, coords);
+        }}
+        title={modelModalTitle}
+        subtitle="Choose a model to add to this layer."
+        confirmLabel="Add Model"
+        showNameInput={false}
+        showCoordsInput={true}
+        showModelInput={true}
       />
     </div>
   );

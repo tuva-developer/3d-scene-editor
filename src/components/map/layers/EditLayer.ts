@@ -174,6 +174,7 @@ export class EditLayer implements CustomLayerInterface {
     id: string,
     defaultScale: number = 1,
     coords?: { lat: number; lng: number },
+    options?: { instanceId?: string; name?: string },
   ): void {
     if (!this.map) {
       return;
@@ -227,6 +228,10 @@ export class EditLayer implements CustomLayerInterface {
     }
 
     cloneObj3d.userData = {
+      instanceId: options?.instanceId,
+      modelId: id,
+      name: options?.name,
+      coords: coords ? { lat, lng } : null,
       tile: { z: this.editorLevel, x: local.tileX, y: local.tileY },
       isModelRoot: true,
       scaleUnit,
@@ -234,8 +239,8 @@ export class EditLayer implements CustomLayerInterface {
     };
 
     tileData.objects.push({
-      id: "",
-      name: "",
+      id: options?.instanceId ?? "",
+      name: options?.name ?? "",
       object3d: cloneObj3d,
       textureUrl: "",
       textureName: "",
@@ -250,13 +255,115 @@ export class EditLayer implements CustomLayerInterface {
     cloneObj3d.traverse((child) => {
       if (child instanceof THREE.Mesh) {
         const objectShadow = new MaplibreShadowMesh(child);
-        objectShadow.userData = { scale_unit: scaleUnit };
+        objectShadow.userData = {
+          scale_unit: scaleUnit,
+          modelInstanceId: options?.instanceId,
+        };
         objectShadow.matrixAutoUpdate = false;
         mainScene.add(objectShadow);
       }
     });
     mainScene.add(cloneObj3d);
     this.map?.triggerRepaint();
+  }
+
+  removeObjectByInstanceId(instanceId: string): boolean {
+    for (const tileData of this.tileCache.values()) {
+      const idx = tileData.objects.findIndex((obj) => obj.id === instanceId);
+      if (idx === -1) {
+        continue;
+      }
+      const objInfo = tileData.objects[idx];
+      tileData.objects.splice(idx, 1);
+      tileData.sceneTile.remove(objInfo.object3d);
+      const shadowMeshes: THREE.Object3D[] = [];
+      tileData.sceneTile.traverse((child) => {
+        if (child instanceof MaplibreShadowMesh && child.userData?.modelInstanceId === instanceId) {
+          shadowMeshes.push(child);
+        }
+      });
+      shadowMeshes.forEach((mesh) => tileData.sceneTile.remove(mesh));
+      this.map?.triggerRepaint();
+      return true;
+    }
+    return false;
+  }
+
+  cloneObjectByInstanceId(instanceId: string, newInstanceId: string): boolean {
+    const modelEntry = this.findObjectByInstanceId(instanceId);
+    if (!modelEntry || !this.map) {
+      return false;
+    }
+    const { tileData, object } = modelEntry;
+    const cloneObj3d = object.clone(true);
+    cloneObj3d.matrixAutoUpdate = false;
+    cloneObj3d.updateMatrix();
+    cloneObj3d.updateMatrixWorld(true);
+
+    const modelId = object.userData?.modelId as string | undefined;
+    const modelData = modelId ? this.modelCache.get(modelId) : undefined;
+    let mixer: THREE.AnimationMixer | null = null;
+    let actions: THREE.AnimationAction[] | null = null;
+    if (modelData?.animations && modelData.animations.length > 0) {
+      mixer = new THREE.AnimationMixer(cloneObj3d);
+      actions = [];
+      modelData.animations.forEach((clip) => {
+        const action = mixer?.clipAction(clip);
+        if (action) {
+          action.reset();
+          action.setLoop(THREE.LoopRepeat, Infinity);
+          action.play();
+          actions?.push(action);
+        }
+      });
+    }
+
+    cloneObj3d.userData = {
+      ...object.userData,
+      instanceId: newInstanceId,
+      mixer,
+    };
+
+    tileData.objects.push({
+      id: newInstanceId,
+      name: object.userData?.name ?? "",
+      object3d: cloneObj3d,
+      textureUrl: "",
+      textureName: "",
+      modelName: "",
+      modelUrl: "",
+      mixer,
+      actions,
+      animations: modelData?.animations ?? [],
+    });
+
+    const mainScene = tileData.sceneTile;
+    cloneObj3d.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        const objectShadow = new MaplibreShadowMesh(child);
+        objectShadow.userData = {
+          scale_unit: child.userData?.scale_unit ?? child.userData?.scaleUnit ?? object.userData?.scaleUnit ?? 1,
+          modelInstanceId: newInstanceId,
+        };
+        objectShadow.matrixAutoUpdate = false;
+        mainScene.add(objectShadow);
+      }
+    });
+    mainScene.add(cloneObj3d);
+    this.map?.triggerRepaint();
+    return true;
+  }
+
+  private findObjectByInstanceId(
+    instanceId: string,
+  ): { tileData: DataTileInfoForEditorLayer; object: THREE.Object3D } | null {
+    for (const tileData of this.tileCache.values()) {
+      const obj = tileData.objects.find((entry) => entry.id === instanceId);
+      if (obj?.object3d) {
+        return { tileData, object: obj.object3d };
+      }
+    }
+    return null;
   }
 
   render(): void {

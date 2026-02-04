@@ -31,6 +31,12 @@ export interface MapViewHandle {
   enableClippingPlanesObjectSelected(enable: boolean): void;
   enableFootPrintWhenEdit(enable: boolean): void;
   addEditLayer(options?: { name?: string; modelUrl?: string; coords?: { lat: number; lng: number } }): string | null;
+  addModelToLayer(
+    layerId: string,
+    options?: { modelUrl?: string; coords?: { lat: number; lng: number }; instanceId?: string; name?: string }
+  ): boolean;
+  removeModelFromLayer(layerId: string, instanceId: string): boolean;
+  cloneModelInLayer(layerId: string, instanceId: string, newInstanceId: string): boolean;
   getSelectedTransform(): TransformValues | null;
   setSelectedTransform(values: Partial<TransformValues>): void;
   flyToLatLng(lat: number, lng: number, zoom?: number): void;
@@ -511,28 +517,29 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
           },
         });
         editorLayer.setSunPos(sunPos.altitude, sunPos.azimuth);
-        const defaultGlbPath = (import.meta.env.VITE_EDIT_MODEL_URL as string | undefined)?.trim() || "/models/default.glb";
-        const glbPath = options?.modelUrl?.trim() || defaultGlbPath;
-        const isBlobUrl = glbPath.startsWith("blob:");
-        loadModelFromGlb(glbPath)
-          .then((modeldata) => {
-            editorLayer.addObjectsToCache([
-              {
-                id: glbPath,
-                modeldata,
-              },
-            ]);
-            editorLayer.addObjectToScene(glbPath, 1, options?.coords);
-            if (isBlobUrl) {
-              URL.revokeObjectURL(glbPath);
-            }
-          })
-          .catch((err) => {
-            console.error("[MapView] Failed to load edit model:", err);
-            if (isBlobUrl) {
-              URL.revokeObjectURL(glbPath);
-            }
-          });
+        if (options?.modelUrl?.trim()) {
+          const glbPath = options.modelUrl.trim();
+          const isBlobUrl = glbPath.startsWith("blob:");
+          loadModelFromGlb(glbPath)
+            .then((modeldata) => {
+              editorLayer.addObjectsToCache([
+                {
+                  id: glbPath,
+                  modeldata,
+                },
+              ]);
+              editorLayer.addObjectToScene(glbPath, 1, options?.coords);
+              if (isBlobUrl) {
+                URL.revokeObjectURL(glbPath);
+              }
+            })
+            .catch((err) => {
+              console.error("[MapView] Failed to load edit model:", err);
+              if (isBlobUrl) {
+                URL.revokeObjectURL(glbPath);
+              }
+            });
+        }
         mainMap.addLayer(editorLayer);
         mainMap.moveLayer(editorLayer.id, outlineLayer.id);
         editLayersRef.current.push({ layer: editorLayer, name: layerName });
@@ -545,6 +552,66 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
           })),
         ]);
         return id;
+      },
+      addModelToLayer(layerId, options) {
+        if (layerId === "models") {
+          return false;
+        }
+        const mainMap = map.current;
+        if (!mainMap) {
+          return false;
+        }
+        const entry = editLayersRef.current.find((item) => item.layer.id === layerId);
+        if (!entry) {
+          return false;
+        }
+        const defaultGlbPath =
+          (import.meta.env.VITE_EDIT_MODEL_URL as string | undefined)?.trim() || "/models/default.glb";
+        const glbPath = options?.modelUrl?.trim() || defaultGlbPath;
+        const isBlobUrl = glbPath.startsWith("blob:");
+        loadModelFromGlb(glbPath)
+          .then((modeldata) => {
+            entry.layer.addObjectsToCache([
+              {
+                id: glbPath,
+                modeldata,
+              },
+            ]);
+            entry.layer.addObjectToScene(glbPath, 1, options?.coords, {
+              instanceId: options?.instanceId,
+              name: options?.name,
+            });
+            if (isBlobUrl) {
+              URL.revokeObjectURL(glbPath);
+            }
+          })
+          .catch((err) => {
+            console.error("[MapView] Failed to load edit model:", err);
+            if (isBlobUrl) {
+              URL.revokeObjectURL(glbPath);
+            }
+          });
+        return true;
+      },
+      removeModelFromLayer(layerId, instanceId) {
+        if (layerId === "models") {
+          return false;
+        }
+        const entry = editLayersRef.current.find((item) => item.layer.id === layerId);
+        if (!entry) {
+          return false;
+        }
+        return entry.layer.removeObjectByInstanceId(instanceId);
+      },
+      cloneModelInLayer(layerId, instanceId, newInstanceId) {
+        if (layerId === "models") {
+          return false;
+        }
+        const entry = editLayersRef.current.find((item) => item.layer.id === layerId);
+        if (!entry) {
+          return false;
+        }
+        return entry.layer.cloneObjectByInstanceId(instanceId, newInstanceId);
       },
       setSunTime(date) {
         const mainMap = map.current;
