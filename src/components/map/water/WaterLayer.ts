@@ -8,7 +8,12 @@ import { reverseFaceWinding } from "@/components/map/data/models/objModel";
 import { latlonToLocal, clampZoom } from "@/components/map/data/convert/coords";
 import { CustomVectorSource } from "@/components/map/source/CustomVectorSource";
 import { buildGeo, triangulatePolygonWithHoles } from "@/components/map/source/GeojsonConverter";
-import { createWaterMaterial } from "@/components/map/water/WaterMaterial";
+import {
+  applyWaterSettings,
+  createWaterMaterial,
+  normalizeWaterSettings,
+  type WaterSettings,
+} from "@/components/map/water/WaterMaterial";
 import { calculateSunDirectionMaplibre } from "@/components/map/shadow/ShadowHelper";
 
 export type SunOptions = {
@@ -36,6 +41,8 @@ export type WaterLayerOpts = {
   applyGlobeMatrix: boolean;
   sourceLayer: string;
   sun?: SunOptions;
+  normalTextureUrl?: string;
+  settings?: Partial<WaterSettings>;
 };
 
 export class WaterLayer implements CustomLayerInterface {
@@ -59,6 +66,8 @@ export class WaterLayer implements CustomLayerInterface {
   private waterGeometry: Feature<Polygon | MultiPolygon, GeoJsonProperties> | null = null;
   private isRebuildWaterGeometry = true;
   private readonly TILE_EXTENT = 8192;
+  private normalTextureUrl?: string;
+  private waterSettings: WaterSettings;
   private onPick?: (info: PickHit) => void;
   private onPickFail?: () => void;
 
@@ -67,14 +76,18 @@ export class WaterLayer implements CustomLayerInterface {
     this.applyGlobeMatrix = opts.applyGlobeMatrix;
     this.onPick = opts.onPick;
     this.onPickFail = opts.onPickfail;
+    this.normalTextureUrl = opts.normalTextureUrl;
+    this.waterSettings = normalizeWaterSettings(opts.settings);
     this.sourceLayer = opts.sourceLayer;
-    this.waterNormalTexture = new THREE.TextureLoader().load("/normal/4141-normal.jpg", (t) => {
+    const texUrl = this.normalTextureUrl || "/normal/4141-normal.jpg";
+    this.waterNormalTexture = new THREE.TextureLoader().load(texUrl, (t) => {
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
     });
     this.waterMaterial = createWaterMaterial({
       color: 0x2a7fff,
-      opacity: 1.0,
+      opacity: this.waterSettings.opacity,
       tex: this.waterNormalTexture,
+      settings: this.waterSettings,
     });
     if (opts.sun) {
       this.sun = {
@@ -119,6 +132,19 @@ export class WaterLayer implements CustomLayerInterface {
 
   setVectorSource(source: CustomVectorSource): void {
     this.vectorSource = source;
+  }
+
+  setVisible(visible: boolean): void {
+    this.visible = visible;
+    this.map?.triggerRepaint?.();
+  }
+
+  setWaterSettings(settings: WaterSettings): void {
+    this.waterSettings = settings;
+    if (this.waterMaterial) {
+      applyWaterSettings(this.waterMaterial, settings);
+    }
+    this.map?.triggerRepaint?.();
   }
 
   private tileKey(x: number, y: number, z: number): string {

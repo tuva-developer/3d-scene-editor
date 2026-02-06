@@ -1,15 +1,74 @@
 import * as THREE from "three";
 
-export type WaterOpts = {
-  color: number;
+export type WaterSettings = {
+  waterColor: string;
+  deepWaterColor: string;
+  shallowWaterColor: string;
+  foamColor: string;
+  waveSpeed: number;
+  waveStrength: number;
   opacity: number;
-  tex: THREE.Texture;
+  uvScale: number;
+  specularStrength: number;
+  shininess: number;
+  distortionScale: number;
+  noiseStrength: number;
+  lightRayStrength: number;
 };
+
+export const DEFAULT_WATER_SETTINGS: WaterSettings = {
+  waterColor: "#2c6e8f",
+  deepWaterColor: "#0f3a50",
+  shallowWaterColor: "#6fb7cc",
+  foamColor: "#ecf6f8",
+  waveSpeed: 2.0,
+  waveStrength: 0.1,
+  opacity: 1.0,
+  uvScale: 0.0015,
+  specularStrength: 0.8,
+  shininess: 8.0,
+  distortionScale: 3.0,
+  noiseStrength: 0.5,
+  lightRayStrength: 0.15,
+};
+
+export type WaterOpts = {
+  color?: number;
+  opacity?: number;
+  tex: THREE.Texture;
+  settings?: Partial<WaterSettings>;
+};
+
+export function normalizeWaterSettings(settings?: Partial<WaterSettings>): WaterSettings {
+  return { ...DEFAULT_WATER_SETTINGS, ...(settings ?? {}) };
+}
+
+export function applyWaterSettings(material: THREE.ShaderMaterial, settings: WaterSettings): void {
+  const uniforms = material.uniforms;
+  uniforms.waterColor.value.set(settings.waterColor);
+  uniforms.deepWaterColor.value.set(settings.deepWaterColor);
+  uniforms.shallowWaterColor.value.set(settings.shallowWaterColor);
+  uniforms.foamColor.value.set(settings.foamColor);
+  uniforms.waveSpeed.value = settings.waveSpeed;
+  uniforms.waveStrength.value = settings.waveStrength;
+  uniforms.opacity.value = settings.opacity;
+  uniforms.uvScale.value = settings.uvScale;
+  uniforms.specularStrength.value = settings.specularStrength;
+  uniforms.shininess.value = settings.shininess;
+  uniforms.distortionScale.value = settings.distortionScale;
+  uniforms.noiseStrength.value = settings.noiseStrength;
+  uniforms.lightRayStrength.value = settings.lightRayStrength;
+}
 
 export function createWaterMaterial(opts: WaterOpts): THREE.ShaderMaterial {
   if (opts.tex) {
     opts.tex.wrapS = THREE.RepeatWrapping;
     opts.tex.wrapT = THREE.RepeatWrapping;
+  }
+
+  const initialSettings = normalizeWaterSettings(opts.settings);
+  if (typeof opts.opacity === "number") {
+    initialSettings.opacity = opts.opacity;
   }
 
   const waterMat = new THREE.ShaderMaterial({
@@ -25,7 +84,7 @@ export function createWaterMaterial(opts: WaterOpts): THREE.ShaderMaterial {
       time: { value: 0 },
       waveSpeed: { value: 2.0 },
       waveStrength: { value: 0.1 },
-      opacity: { value: opts.opacity },
+      opacity: { value: opts.opacity ?? 1.0 },
       uvScale: { value: 0.0015 },
       specularStrength: { value: 0.8 },
       shininess: { value: 8.0 },
@@ -218,5 +277,6 @@ export function createWaterMaterial(opts: WaterOpts): THREE.ShaderMaterial {
     side: THREE.FrontSide,
     depthWrite: false,
   });
+  applyWaterSettings(waterMat, initialSettings);
   return waterMat;
 }

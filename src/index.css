@@ -40,18 +40,18 @@
   --map-scale-border: rgba(15, 23, 42, 0.16);
   --map-scale-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
   --map-scale-text: #111827;
-  --timebar-bg: rgba(17, 24, 39, 0.9);
-  --timebar-border: rgba(15, 23, 42, 0.28);
-  --timebar-shadow: 0 12px 26px rgba(15, 23, 42, 0.22);
-  --timebar-text: #f8fafc;
-  --timebar-muted: rgba(248, 250, 252, 0.7);
+  --timebar-bg: rgba(245, 245, 245, 0.96);
+  --timebar-border: rgba(15, 23, 42, 0.12);
+  --timebar-shadow: 0 8px 20px rgba(15, 23, 42, 0.16);
+  --timebar-text: #111827;
+  --timebar-muted: rgba(17, 24, 39, 0.6);
   --timebar-height: 82px;
-  --timebar-track: rgba(255, 255, 255, 0.18);
+  --timebar-track: rgba(15, 23, 42, 0.12);
   --timebar-fill: #f59e0b;
   --timebar-thumb: #fef3c7;
-  --timebar-pill-bg: rgba(255, 255, 255, 0.06);
-  --timebar-pill-border: rgba(255, 255, 255, 0.12);
-  --timebar-accent: #fbbf24;
+  --timebar-pill-bg: rgba(15, 23, 42, 0.04);
+  --timebar-pill-border: rgba(15, 23, 42, 0.12);
+  --timebar-accent: #d97706;
   background: var(--app-bg);
 }
 

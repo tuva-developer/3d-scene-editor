@@ -11,6 +11,7 @@ export type MapStyleOption = {
 export type LayerOption = {
   id: string;
   label: string;
+  kind?: "base" | "edit" | "instance" | "water";
 };
 
 export type LayerModelInfo = {

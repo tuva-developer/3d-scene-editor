@@ -63,7 +63,7 @@ export const EditorToolbar = ({
     "flex items-center gap-2 border-r border-[var(--divider)] pr-2";
   const groupLastClassName = "flex items-center gap-2";
   const logoClassName =
-    "h-6 w-6 rounded-md border border-[var(--btn-border)] bg-[var(--btn-bg)] p-1";
+    "h-7 w-7 rounded-md";
   const mapControlsClassName =
     "maplibre-topbar-controls flex items-center gap-2";
   const labelClassName =
@@ -71,13 +71,13 @@ export const EditorToolbar = ({
   const selectClassName =
     "h-8 rounded-md border border-[var(--btn-border)] bg-[var(--btn-bg)] px-2 text-[11px] text-[var(--text)] outline-none transition focus:border-[var(--btn-active-border)] focus:ring-2 focus:ring-[color:var(--focus-ring)]/40";
   const buttonBaseClassName =
-    "flex h-8 items-center justify-center rounded-md border border-[var(--btn-border)] bg-[var(--btn-bg)] text-[12px] text-[var(--text)] transition hover:-translate-y-px hover:border-[var(--btn-border-hover)] hover:bg-[var(--btn-hover)]";
+    "flex h-8 items-center justify-center rounded-md border border-[var(--btn-border)] bg-[var(--btn-bg)] text-[12px] text-[var(--text)] transition hover:border-[var(--btn-border-hover)] hover:bg-[var(--btn-hover)]";
   const buttonIconClassName = "w-8";
   const buttonWideClassName = "px-2.5";
   const buttonActiveClassName =
-    "border-[var(--btn-active-border)] bg-[var(--btn-active-bg)] text-[var(--btn-active-text)] shadow-[var(--btn-active-ring)]";
+    "border-[var(--btn-active-border)] bg-[var(--btn-active-bg)] text-[var(--btn-active-text)]";
   const themeToggleActiveClassName =
-    "border-[var(--btn-active-border)] bg-[var(--btn-active-bg)] text-[var(--btn-active-text)] shadow-[var(--btn-active-ring)]";
+    "border-[var(--btn-active-border)] bg-[var(--btn-active-bg)] text-[var(--btn-active-text)]";
   const modalOverlayClassName =
     "fixed inset-0 z-[2100] flex items-center justify-center bg-gradient-to-b from-black/50 via-black/40 to-black/60 backdrop-blur-md";
   const modalClassName =

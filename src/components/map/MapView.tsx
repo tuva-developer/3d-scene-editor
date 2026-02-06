@@ -11,6 +11,7 @@ import { getSunPosition, getSunPositionAt } from "@/components/map/shadow/Shadow
 import { MathUtils } from "three";
 import { CustomVectorSource } from "@/components/map/source/CustomVectorSource";
 import { WaterLayer } from "@/components/map/water/WaterLayer";
+import { normalizeWaterSettings, type WaterSettings } from "@/components/map/water/WaterMaterial";
 import { InstanceLayer } from "@/components/map/instance/InstanceLayer";
 
 interface MapViewProps {
@@ -47,6 +48,28 @@ export interface MapViewHandle {
   setLayerVisibility(id: string, visible: boolean): void;
   removeLayer(id: string): void;
   setSunTime(date: Date): void;
+  addInstanceLayer(options: {
+    tileUrl: string;
+    sourceLayer: string;
+    modelUrls: string[];
+    layerId?: string;
+    minZoom?: number;
+    maxZoom?: number;
+    tileSize?: number;
+    applyGlobeMatrix?: boolean;
+  }): string | null;
+  addWaterLayer(options: {
+    tileUrl: string;
+    sourceLayer: string;
+    normalTextureUrl?: string;
+    settings?: WaterSettings;
+    layerId?: string;
+    minZoom?: number;
+    maxZoom?: number;
+    tileSize?: number;
+    applyGlobeMatrix?: boolean;
+  }): string | null;
+  setWaterLayerSettings(layerId: string, settings: WaterSettings): void;
 }
 
 function addControlMaplibre(map: maplibregl.Map, container?: HTMLElement | null): () => void {
@@ -103,10 +126,41 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
     const overlayLayerRef = useRef<OverlayLayer | null>(null);
     const outlineLayerRef = useRef<OutlineLayer | null>(null);
     const modelLayerRef = useRef<ModelLayer | null>(null);
-    const waterLayerRef = useRef<WaterLayer | null>(null);
-    const waterSourceRef = useRef<CustomVectorSource | null>(null);
-    const instanceLayerRef = useRef<InstanceLayer | null>(null);
-    const instanceSourceRef = useRef<CustomVectorSource | null>(null);
+    const customWaterLayerRef = useRef<Map<string, WaterLayer>>(new Map());
+    const customWaterSourceRef = useRef<Map<string, CustomVectorSource>>(new Map());
+    const customWaterConfigRef = useRef<
+      Map<
+        string,
+        {
+          tileUrl: string;
+          sourceLayer: string;
+          normalTextureUrl?: string;
+          settings: WaterSettings;
+          layerId: string;
+          minZoom: number;
+          maxZoom: number;
+          tileSize: number;
+          applyGlobeMatrix: boolean;
+        }
+      >
+    >(new Map());
+    const instanceLayerRef = useRef<Map<string, InstanceLayer>>(new Map());
+    const instanceSourceRef = useRef<Map<string, CustomVectorSource>>(new Map());
+    const instanceLayerConfigRef = useRef<
+      Map<
+        string,
+        {
+          tileUrl: string;
+          sourceLayer: string;
+          modelUrls: string[];
+          layerId: string;
+          minZoom: number;
+          maxZoom: number;
+          tileSize: number;
+          applyGlobeMatrix: boolean;
+        }
+      >
+    >(new Map());
     const currentModeRef = useRef<TransformMode>("translate");
     const editLayersRef = useRef<Array<{ layer: EditLayer; name: string }>>([]);
     const styleUrlRef = useRef<string | null>(null);
@@ -193,10 +247,16 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
         overlayLayerRef.current?.unselect();
         outlineLayerRef.current?.unselect();
         removeLayerIfExists(mainMap, "models");
-        const waterId = (import.meta.env.VITE_WATER_LAYER_ID as string | undefined)?.trim() || "water";
-        const instanceId = (import.meta.env.VITE_INSTANCE_LAYER_ID as string | undefined)?.trim() || "example_tree";
-        removeLayerIfExists(mainMap, instanceId);
-        removeLayerIfExists(mainMap, waterId);
+        for (const [layerId] of instanceLayerConfigRef.current) {
+          removeLayerIfExists(mainMap, layerId);
+        }
+        instanceLayerRef.current.clear();
+        instanceSourceRef.current.clear();
+        for (const [layerId] of customWaterConfigRef.current) {
+          removeLayerIfExists(mainMap, layerId);
+        }
+        customWaterLayerRef.current.clear();
+        customWaterSourceRef.current.clear();
         const overlayId = (import.meta.env.VITE_OVERLAY_LAYER_ID as string | undefined)?.trim() || "overlay";
         const outlineId = (import.meta.env.VITE_OUTLINE_LAYER_ID as string | undefined)?.trim() || "outline";
         removeLayerIfExists(mainMap, outlineId);
@@ -209,9 +269,9 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
       };
 
       const getLayerOptions = (): LayerOption[] => {
-        const options: LayerOption[] = [{ id: "models", label: "Models (Base)" }];
+        const options: LayerOption[] = [{ id: "models", label: "Base Models", kind: "base" }];
         for (const entry of editLayersRef.current) {
-          options.push({ id: entry.layer.id, label: entry.name });
+          options.push({ id: entry.layer.id, label: entry.name, kind: "edit" as const });
         }
         return options;
       };
@@ -279,72 +339,55 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
         modelLayerRef.current = modelLayer;
         mainMap.addLayer(modelLayer);
 
-        const waterTileUrl =
-          (import.meta.env.VITE_WATER_TILE_URL as string | undefined)?.trim() ||
-          "https://images.daklak.gov.vn/v2/tile/{z}/{x}/{y}/306ec9b5-8146-4a83-9271-bd7b343a574a";
-        const waterSourceLayer =
-          (import.meta.env.VITE_WATER_SOURCE_LAYER as string | undefined)?.trim() || "region_river_index";
-        const waterLayerId = (import.meta.env.VITE_WATER_LAYER_ID as string | undefined)?.trim() || "water";
-        if (waterTileUrl && waterSourceLayer) {
-          const waterSource = new CustomVectorSource({
-            id: "water-custom-source",
-            url: waterTileUrl,
-            minZoom: 0,
-            maxZoom: 16,
-            tileSize: 512,
+        for (const [layerId, config] of customWaterConfigRef.current) {
+          const customWaterSource = new CustomVectorSource({
+            id: `water-custom-source-${layerId}`,
+            url: config.tileUrl,
+            minZoom: config.minZoom,
+            maxZoom: config.maxZoom,
+            tileSize: config.tileSize,
             maxTileCache: 1024,
             map: mainMap,
           });
-          waterSourceRef.current = waterSource;
-          const waterLayer = new WaterLayer({
-            id: waterLayerId,
-            applyGlobeMatrix: false,
-            sourceLayer: waterSourceLayer,
+          customWaterSourceRef.current.set(layerId, customWaterSource);
+          const customWaterLayer = new WaterLayer({
+            id: config.layerId,
+            applyGlobeMatrix: config.applyGlobeMatrix,
+            sourceLayer: config.sourceLayer,
+            normalTextureUrl: config.normalTextureUrl,
+            settings: config.settings,
             sun: sunOptions,
           });
-          waterLayer.setVectorSource(waterSource);
-          waterLayerRef.current = waterLayer;
+          customWaterLayer.setVectorSource(customWaterSource);
+          customWaterLayerRef.current.set(layerId, customWaterLayer);
           const beforeId = mainMap.getLayer("fill-vnairport-index") ? "fill-vnairport-index" : undefined;
           if (beforeId) {
-            mainMap.addLayer(waterLayer, beforeId);
+            mainMap.addLayer(customWaterLayer, beforeId);
           } else {
-            mainMap.addLayer(waterLayer);
+            mainMap.addLayer(customWaterLayer);
           }
         }
 
-        const instanceTileUrl =
-          (import.meta.env.VITE_INSTANCE_TILE_URL as string | undefined)?.trim() ||
-          "http://10.222.3.81:8083/VietbandoMapService/api/image/?Function=GetVectorTile&MapName=IndoorNavigation&Level={z}&TileX={x}&TileY={y}&UseTileCache=true";
-        const instanceSourceLayer =
-          (import.meta.env.VITE_INSTANCE_SOURCE_LAYER as string | undefined)?.trim() || "trees";
-        const instanceLayerId =
-          (import.meta.env.VITE_INSTANCE_LAYER_ID as string | undefined)?.trim() || "example_tree";
-        if (instanceTileUrl && instanceSourceLayer) {
+        for (const [layerId, config] of instanceLayerConfigRef.current) {
           const instanceSource = new CustomVectorSource({
-            id: "instance-custom-source",
-            url: instanceTileUrl,
-            minZoom: 0,
-            maxZoom: 16,
-            tileSize: 512,
+            id: `instance-custom-source-${layerId}`,
+            url: config.tileUrl,
+            minZoom: config.minZoom,
+            maxZoom: config.maxZoom,
+            tileSize: config.tileSize,
             maxTileCache: 1024,
             map: mainMap,
           });
-          instanceSourceRef.current = instanceSource;
+          instanceSourceRef.current.set(layerId, instanceSource);
           const instanceLayer = new InstanceLayer({
-            id: instanceLayerId,
-            sourceLayer: instanceSourceLayer,
-            applyGlobeMatrix: false,
+            id: config.layerId,
+            sourceLayer: config.sourceLayer,
+            applyGlobeMatrix: config.applyGlobeMatrix,
             sun: sunOptions,
-            objectUrl: [
-              "/test_data/test_instance/tree2.glb",
-              "/test_data/test_instance/tree3.glb",
-              "/test_data/test_instance/tree4.glb",
-              "/test_data/test_instance/tree5.glb",
-              "/test_data/test_instance/tree6.glb",
-            ],
+            objectUrl: config.modelUrls,
           });
           instanceLayer.setVectorSource(instanceSource);
-          instanceLayerRef.current = instanceLayer;
+          instanceLayerRef.current.set(layerId, instanceLayer);
           mainMap.addLayer(instanceLayer);
         }
 
@@ -529,6 +572,16 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
           modelLayerRef.current?.setVisible(visible);
           return;
         }
+        if (instanceLayerRef.current.has(id)) {
+          instanceLayerRef.current.get(id)?.setVisible(visible);
+          map.current?.triggerRepaint();
+          return;
+        }
+        if (customWaterLayerRef.current.has(id)) {
+          customWaterLayerRef.current.get(id)?.setVisible(visible);
+          map.current?.triggerRepaint();
+          return;
+        }
         const entry = editLayersRef.current.find((item) => item.layer.id === id);
         if (entry) {
           entry.layer.setVisible(visible);
@@ -537,6 +590,26 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
       },
       removeLayer(id) {
         if (id === "models") {
+          return;
+        }
+        if (instanceLayerRef.current.has(id)) {
+          if (map.current?.getLayer(id)) {
+            map.current.removeLayer(id);
+          }
+          instanceLayerRef.current.delete(id);
+          instanceSourceRef.current.delete(id);
+          instanceLayerConfigRef.current.delete(id);
+          map.current?.triggerRepaint();
+          return;
+        }
+        if (customWaterLayerRef.current.has(id)) {
+          if (map.current?.getLayer(id)) {
+            map.current.removeLayer(id);
+          }
+          customWaterLayerRef.current.delete(id);
+          customWaterSourceRef.current.delete(id);
+          customWaterConfigRef.current.delete(id);
+          map.current?.triggerRepaint();
           return;
         }
         const idx = editLayersRef.current.findIndex((item) => item.layer.id === id);
@@ -551,8 +624,8 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
         }
         editLayersRef.current.splice(idx, 1);
         const options: LayerOption[] = [
-          { id: "models", label: "Models (Base)" },
-          ...editLayersRef.current.map((item) => ({ id: item.layer.id, label: item.name })),
+          { id: "models", label: "Base Models", kind: "base" as const },
+          ...editLayersRef.current.map((item) => ({ id: item.layer.id, label: item.name, kind: "edit" as const })),
         ];
         onLayerOptionsChangeRef.current?.(options);
       },
@@ -626,10 +699,11 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
         editLayersRef.current.push({ layer: editorLayer, name: layerName });
         editorLayer.setPickEnabled(activeLayerIdRef.current === editorLayer.id);
         onLayerOptionsChangeRef.current?.([
-          { id: "models", label: "Models (Base)" },
+          { id: "models", label: "Base Models", kind: "base" as const },
           ...editLayersRef.current.map((entry) => ({
             id: entry.layer.id,
             label: entry.name,
+            kind: "edit" as const,
           })),
         ]);
         return id;
@@ -703,11 +777,130 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
         const centerPoint = mainMap.getCenter();
         const sunPos = getSunPositionAt(centerPoint.lat, centerPoint.lng, date);
         modelLayerRef.current?.setSunPos(sunPos.altitude, sunPos.azimuth);
-        instanceLayerRef.current?.setSunPos(sunPos.altitude, sunPos.azimuth);
+        instanceLayerRef.current.forEach((layer) => {
+          layer.setSunPos(sunPos.altitude, sunPos.azimuth);
+        });
         editLayersRef.current.forEach((entry) => {
           entry.layer.setSunPos(sunPos.altitude, sunPos.azimuth);
         });
         mainMap.triggerRepaint();
+      },
+      addInstanceLayer(options) {
+        const mainMap = map.current;
+        if (!mainMap) {
+          return null;
+        }
+        const layerId =
+          options.layerId?.trim() ||
+          `instance-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+
+        const centerPoint = mainMap.getCenter();
+        const sunTime = sunTimeRef.current ?? new Date();
+        const sunPos = getSunPositionAt(centerPoint.lat, centerPoint.lng, sunTime);
+        const sunOptions = {
+          shadow: true,
+          altitude: sunPos.altitude,
+          azimuth: sunPos.azimuth,
+        };
+
+        const instanceSource = new CustomVectorSource({
+          id: `instance-custom-source-${layerId}`,
+          url: options.tileUrl,
+          minZoom: options.minZoom ?? 0,
+          maxZoom: options.maxZoom ?? 16,
+          tileSize: options.tileSize ?? 512,
+          maxTileCache: 1024,
+          map: mainMap,
+        });
+        instanceSourceRef.current.set(layerId, instanceSource);
+        const instanceLayer = new InstanceLayer({
+          id: layerId,
+          sourceLayer: options.sourceLayer,
+          applyGlobeMatrix: options.applyGlobeMatrix ?? false,
+          sun: sunOptions,
+          objectUrl: options.modelUrls,
+        });
+        instanceLayer.setVectorSource(instanceSource);
+        instanceLayerRef.current.set(layerId, instanceLayer);
+        instanceLayerConfigRef.current.set(layerId, {
+          tileUrl: options.tileUrl,
+          sourceLayer: options.sourceLayer,
+          modelUrls: options.modelUrls,
+          layerId,
+          minZoom: options.minZoom ?? 0,
+          maxZoom: options.maxZoom ?? 16,
+          tileSize: options.tileSize ?? 512,
+          applyGlobeMatrix: options.applyGlobeMatrix ?? false,
+        });
+        mainMap.addLayer(instanceLayer);
+        mainMap.triggerRepaint();
+        return layerId;
+      },
+      addWaterLayer(options) {
+        const mainMap = map.current;
+        if (!mainMap) {
+          return null;
+        }
+        const layerId =
+          options.layerId?.trim() ||
+          `water-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+        const centerPoint = mainMap.getCenter();
+        const sunTime = sunTimeRef.current ?? new Date();
+        const sunPos = getSunPositionAt(centerPoint.lat, centerPoint.lng, sunTime);
+        const sunOptions = {
+          shadow: true,
+          altitude: sunPos.altitude,
+          azimuth: sunPos.azimuth,
+        };
+        const customWaterSource = new CustomVectorSource({
+          id: `water-custom-source-${layerId}`,
+          url: options.tileUrl,
+          minZoom: options.minZoom ?? 0,
+          maxZoom: options.maxZoom ?? 16,
+          tileSize: options.tileSize ?? 512,
+          maxTileCache: 1024,
+          map: mainMap,
+        });
+        customWaterSourceRef.current.set(layerId, customWaterSource);
+        const customWaterLayer = new WaterLayer({
+          id: layerId,
+          applyGlobeMatrix: options.applyGlobeMatrix ?? false,
+          sourceLayer: options.sourceLayer,
+          normalTextureUrl: options.normalTextureUrl,
+          settings: options.settings,
+          sun: sunOptions,
+        });
+        customWaterLayer.setVectorSource(customWaterSource);
+        customWaterLayerRef.current.set(layerId, customWaterLayer);
+        customWaterConfigRef.current.set(layerId, {
+          tileUrl: options.tileUrl,
+          sourceLayer: options.sourceLayer,
+          normalTextureUrl: options.normalTextureUrl,
+          settings: normalizeWaterSettings(options.settings),
+          layerId,
+          minZoom: options.minZoom ?? 0,
+          maxZoom: options.maxZoom ?? 16,
+          tileSize: options.tileSize ?? 512,
+          applyGlobeMatrix: options.applyGlobeMatrix ?? false,
+        });
+        const beforeId = mainMap.getLayer("fill-vnairport-index") ? "fill-vnairport-index" : undefined;
+        if (beforeId) {
+          mainMap.addLayer(customWaterLayer, beforeId);
+        } else {
+          mainMap.addLayer(customWaterLayer);
+        }
+        mainMap.triggerRepaint();
+        return layerId;
+      },
+      setWaterLayerSettings(layerId, settings) {
+        const layer = customWaterLayerRef.current.get(layerId);
+        if (layer) {
+          layer.setWaterSettings(settings);
+        }
+        const config = customWaterConfigRef.current.get(layerId);
+        if (config) {
+          customWaterConfigRef.current.set(layerId, { ...config, settings });
+        }
       },
     }));
 

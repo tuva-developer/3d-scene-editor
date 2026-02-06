@@ -119,6 +119,11 @@ export class InstanceLayer implements CustomLayerInterface {
     this.map?.triggerRepaint();
   }
 
+  setVisible(v: boolean): void {
+    this.visible = v;
+    this.map?.triggerRepaint?.();
+  }
+
   onAdd(map: maplibregl.Map, gl: WebGLRenderingContext): void {
     this.map = map;
     this.camera = new THREE.Camera();
@@ -134,15 +139,33 @@ export class InstanceLayer implements CustomLayerInterface {
     map.on("click", this.handleClick);
 
     this.objectUrls.forEach((url) => {
-      loadModelFromGlb(url).then((modelData) => {
-        if (modelData.object3d) {
-          const object3d = modelData.object3d;
-          bakeWorldAndConvertYupToZup(object3d);
-          if (!this.mapObj3d.has(url)) {
-            this.mapObj3d.set(url, object3d);
+      loadModelFromGlb(url)
+        .then((modelData) => {
+          if (modelData.object3d) {
+            const object3d = modelData.object3d;
+            bakeWorldAndConvertYupToZup(object3d);
+            object3d.traverse((child) => {
+              if (child instanceof THREE.Mesh) {
+                const mat = child.material;
+                if (Array.isArray(mat)) {
+                  mat.forEach((m) => {
+                    m.side = THREE.DoubleSide;
+                    m.needsUpdate = true;
+                  });
+                } else if (mat) {
+                  mat.side = THREE.DoubleSide;
+                  mat.needsUpdate = true;
+                }
+              }
+            });
+            if (!this.mapObj3d.has(url)) {
+              this.mapObj3d.set(url, object3d);
+            }
           }
-        }
-      });
+        })
+        .catch((err) => {
+          console.error("[InstanceLayer] Failed to load model:", url, err);
+        });
     });
   }
 
