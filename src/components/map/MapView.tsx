@@ -6,13 +6,15 @@ import { OverlayLayer } from "@/components/map/layers/OverlayLayer";
 import OutlineLayer from "@/components/map/layers/OutlineLayer";
 import { EditLayer } from "@/components/map/layers/EditLayer";
 import type { LayerOption, TransformMode, TransformValues } from "@/types/common";
-import { loadModelFromGlb } from "@/components/map/data/models/objModel";
+import { loadModelFromGlb, type LightGroupOption } from "@/components/map/data/models/objModel";
 import { getSunPosition, getSunPositionAt } from "@/components/map/shadow/ShadowHelper";
 import { MathUtils } from "three";
 import { CustomVectorSource } from "@/components/map/source/CustomVectorSource";
 import { WaterLayer } from "@/components/map/water/WaterLayer";
 import { normalizeWaterSettings, type WaterSettings } from "@/components/map/water/WaterMaterial";
 import { InstanceLayer } from "@/components/map/instance/InstanceLayer";
+
+type WeatherMode = "sun" | "rain" | "snow";
 
 interface MapViewProps {
   center?: [number, number];
@@ -21,6 +23,9 @@ interface MapViewProps {
   activeLayerId?: string;
   style?: React.CSSProperties;
   showTileBoundaries?: boolean;
+  weather?: WeatherMode;
+  rainDensity?: number;
+  snowDensity?: number;
   mapControlsRef?: React.RefObject<HTMLDivElement | null>;
   onSelectionChange?: (selected: boolean) => void;
   onSelectionElevationChange?: (elevation: number | null) => void;
@@ -46,6 +51,7 @@ export interface MapViewHandle {
   flyToLatLng(lat: number, lng: number, zoom?: number): void;
   getCenter(): { lat: number; lng: number } | null;
   setLayerVisibility(id: string, visible: boolean): void;
+  setLayerLightOption(id: string, option: LightGroupOption): void;
   removeLayer(id: string): void;
   setSunTime(date: Date): void;
   addInstanceLayer(options: {
@@ -105,6 +111,232 @@ function generateId(): string {
   return `layer-${Date.now().toString(36)}-${rand}`;
 }
 
+type RainDrop = {
+  x: number;
+  y: number;
+  len: number;
+  vy: number;
+  vx: number;
+  alpha: number;
+};
+
+type SnowFlake = {
+  x: number;
+  y: number;
+  r: number;
+  vy: number;
+  vx: number;
+  alpha: number;
+};
+
+const WeatherOverlay = ({
+  mode,
+  rainDensity,
+  snowDensity,
+}: {
+  mode: WeatherMode;
+  rainDensity: number;
+  snowDensity: number;
+}) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const frameRef = useRef<number | null>(null);
+  const lastTimeRef = useRef<number>(0);
+  const sizeRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
+  const rainRef = useRef<RainDrop[]>([]);
+  const snowRef = useRef<SnowFlake[]>([]);
+
+  const rebuildParticles = () => {
+    const { width, height } = sizeRef.current;
+    if (width <= 0 || height <= 0) {
+      return;
+    }
+    if (mode === "rain") {
+      const base = Math.min(900, Math.max(200, Math.floor((width * height) / 4600)));
+      const count = Math.round(base * rainDensity);
+      rainRef.current = Array.from({ length: count }, () => ({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        len: 8 + Math.random() * 12,
+        vy: 450 + Math.random() * 450,
+        vx: -50 + Math.random() * 100,
+        alpha: 0.25 + Math.random() * 0.35,
+      }));
+      snowRef.current = [];
+      return;
+    }
+    if (mode === "snow") {
+      const base = Math.min(520, Math.max(120, Math.floor((width * height) / 7000)));
+      const count = Math.round(base * snowDensity);
+      snowRef.current = Array.from({ length: count }, () => ({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        r: 1 + Math.random() * 2.2,
+        vy: 20 + Math.random() * 50,
+        vx: -20 + Math.random() * 40,
+        alpha: 0.4 + Math.random() * 0.4,
+      }));
+      rainRef.current = [];
+      return;
+    }
+    rainRef.current = [];
+    snowRef.current = [];
+  };
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return;
+    }
+
+    const resize = () => {
+      const target = canvas.parentElement ?? canvas;
+      const rect = target.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+      canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+      canvas.style.width = `${rect.width}px`;
+      canvas.style.height = `${rect.height}px`;
+      sizeRef.current = { width: rect.width, height: rect.height };
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      rebuildParticles();
+    };
+
+    resize();
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(() => resize());
+      resizeObserver.observe(canvas.parentElement ?? canvas);
+    } else {
+      window.addEventListener("resize", resize);
+    }
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", resize);
+    };
+  }, [mode, rainDensity, snowDensity]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return;
+    }
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      return;
+    }
+
+    const clearCanvas = () => {
+      const { width, height } = sizeRef.current;
+      ctx.clearRect(0, 0, width, height);
+    };
+
+    if (mode === "sun") {
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current);
+      }
+      frameRef.current = null;
+      clearCanvas();
+      return;
+    }
+
+    rebuildParticles();
+    lastTimeRef.current = performance.now();
+
+    const tick = (time: number) => {
+      const { width, height } = sizeRef.current;
+      const dt = Math.min(0.033, (time - lastTimeRef.current) / 1000);
+      lastTimeRef.current = time;
+      ctx.clearRect(0, 0, width, height);
+
+      if (mode === "rain") {
+        ctx.lineWidth = 1.1;
+        ctx.strokeStyle = "rgba(70, 120, 200, 0.85)";
+        for (const drop of rainRef.current) {
+          drop.x += drop.vx * dt;
+          drop.y += drop.vy * dt;
+          if (drop.y > height + drop.len) {
+            drop.y = -drop.len;
+            drop.x = Math.random() * width;
+          }
+          if (drop.x < -20) {
+            drop.x = width + 20;
+          } else if (drop.x > width + 20) {
+            drop.x = -20;
+          }
+          const alpha = Math.min(1, drop.alpha + 0.25);
+          const tailX = drop.x + drop.vx * 0.04;
+          const tailY = drop.y - drop.len;
+          ctx.globalAlpha = alpha;
+          ctx.beginPath();
+          ctx.moveTo(drop.x, drop.y);
+          ctx.lineTo(tailX, tailY);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      } else if (mode === "snow") {
+        ctx.fillStyle = "rgba(255, 255, 255, 0.98)";
+        ctx.strokeStyle = "rgba(120, 150, 180, 0.9)";
+        ctx.lineWidth = 0.9;
+        for (const flake of snowRef.current) {
+          flake.x += flake.vx * dt;
+          flake.y += flake.vy * dt;
+          if (flake.y > height + 10) {
+            flake.y = -10;
+            flake.x = Math.random() * width;
+          }
+          if (flake.x < -10) {
+            flake.x = width + 10;
+          } else if (flake.x > width + 10) {
+            flake.x = -10;
+          }
+          ctx.globalAlpha = flake.alpha;
+          const r = flake.r * 2.6;
+          ctx.globalAlpha = Math.min(1, flake.alpha + 0.15);
+          // Draw a simple 6-armed snowflake.
+          for (let arm = 0; arm < 6; arm += 1) {
+            const angle = (Math.PI / 3) * arm;
+            const dx = Math.cos(angle) * r;
+            const dy = Math.sin(angle) * r;
+            ctx.beginPath();
+            ctx.moveTo(flake.x - dx * 0.2, flake.y - dy * 0.2);
+            ctx.lineTo(flake.x + dx, flake.y + dy);
+            ctx.stroke();
+          }
+          ctx.beginPath();
+          ctx.arc(flake.x, flake.y, flake.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      frameRef.current = requestAnimationFrame(tick);
+    };
+
+    frameRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current);
+      }
+      frameRef.current = null;
+    };
+  }, [mode, rainDensity, snowDensity]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="pointer-events-none absolute inset-0 z-[30]"
+      style={{ width: "100%", height: "100%" }}
+      aria-hidden="true"
+    />
+  );
+};
+
 const MapView = forwardRef<MapViewHandle, MapViewProps>(
   (
     {
@@ -113,6 +345,9 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
       styleUrl,
       activeLayerId,
       showTileBoundaries = true,
+      weather = "sun",
+      rainDensity = 1,
+      snowDensity = 1,
       mapControlsRef,
       onSelectionChange,
       onSelectionElevationChange,
@@ -588,6 +823,22 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
           map.current?.triggerRepaint();
         }
       },
+      setLayerLightOption(id, option) {
+        if (id === "models") {
+          modelLayerRef.current?.setLightOption(option);
+          return;
+        }
+        if (instanceLayerRef.current.has(id)) {
+          instanceLayerRef.current.get(id)?.setLightOption(option);
+          map.current?.triggerRepaint();
+          return;
+        }
+        const entry = editLayersRef.current.find((item) => item.layer.id === id);
+        if (entry) {
+          entry.layer.setLightOption(option);
+          map.current?.triggerRepaint();
+        }
+      },
       removeLayer(id) {
         if (id === "models") {
           return;
@@ -904,7 +1155,11 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
       },
     }));
 
-    return <div ref={mapContainer} className="h-full w-full" />;
+    return (
+      <div ref={mapContainer} className="relative h-full w-full">
+        <WeatherOverlay mode={weather} rainDensity={rainDensity} snowDensity={snowDensity} />
+      </div>
+    );
   }
 );
 

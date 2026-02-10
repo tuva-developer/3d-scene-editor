@@ -5,6 +5,8 @@ import { MaplibreShadowMesh } from "@/components/map/shadow/ShadowGeometry";
 import { calculateSunDirectionMaplibre } from "@/components/map/shadow/ShadowHelper";
 import {
   createLightGroup,
+  type LightGroup,
+  type LightGroupOption,
   prepareModelForRender,
   transformModel,
 } from "@/components/map/data/models/objModel";
@@ -63,6 +65,7 @@ export type ObjectInfoForEditorLayer = {
 export type DataTileInfoForEditorLayer = {
   objects: Array<ObjectInfoForEditorLayer>;
   sceneTile: THREE.Scene;
+  lightGroup?: LightGroup;
 };
 
 type RenderTile = {
@@ -92,6 +95,7 @@ export class EditLayer implements CustomLayerInterface {
   private onPickFail?: () => void;
   private pickEnabled = true;
   private clock: THREE.Clock | null = null;
+  private lightOption: LightGroupOption | null = null;
 
   constructor(
     opts: EditorLayerOpts & { onPick?: (info: PickHit) => void } & {
@@ -267,6 +271,49 @@ export class EditLayer implements CustomLayerInterface {
     this.map?.triggerRepaint();
   }
 
+  setLightOption(option: LightGroupOption): void {
+    this.lightOption = option;
+    this.tileCache.forEach((tile) => {
+      if (tile.lightGroup) {
+        this.applyLightOption(tile.lightGroup, option);
+      }
+    });
+    this.map?.triggerRepaint?.();
+  }
+
+  private applyLightOption(light: LightGroup, option: LightGroupOption): void {
+    const { directional, hemisphere, ambient } = option;
+    if (directional) {
+      if (directional.intensity !== undefined) {
+        light.dirLight.intensity = directional.intensity;
+      }
+      if (directional.color !== undefined) {
+        light.dirLight.color.set(directional.color);
+      }
+      if (directional.direction !== undefined) {
+        light.dirLight.target.position.copy(directional.direction.clone().multiplyScalar(5000));
+      }
+    }
+    if (hemisphere) {
+      if (hemisphere.intensity !== undefined) {
+        light.hemiLight.intensity = hemisphere.intensity;
+      }
+      if (hemisphere.skyColor !== undefined) {
+        light.hemiLight.color.set(hemisphere.skyColor);
+      }
+      if (hemisphere.groundColor !== undefined) {
+        light.hemiLight.groundColor.set(hemisphere.groundColor);
+      }
+    }
+    if (ambient) {
+      if (ambient.intensity !== undefined) {
+        light.ambientLight.intensity = ambient.intensity;
+      }
+      if (ambient.color !== undefined) {
+        light.ambientLight.color.set(ambient.color);
+      }
+    }
+  }
   removeObjectByInstanceId(instanceId: string): boolean {
     for (const tileData of this.tileCache.values()) {
       const idx = tileData.objects.findIndex((obj) => obj.id === instanceId);
@@ -525,11 +572,15 @@ export class EditLayer implements CustomLayerInterface {
       const dirLight = (this.sun?.sunDir ?? new THREE.Vector3(0.5, 0.5, 0.5))
         .clone()
         .normalize();
-      createLightGroup(scene, dirLight);
+      const lightGroup = createLightGroup(scene, dirLight);
       tileData = {
         objects: [],
         sceneTile: scene,
+        lightGroup,
       };
+      if (this.lightOption) {
+        this.applyLightOption(lightGroup, this.lightOption);
+      }
       this.tileCache.set(key, tileData);
     }
     return tileData;

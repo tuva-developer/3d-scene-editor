@@ -1,12 +1,17 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBorderAll,
   faCircleHalfStroke,
   faClock,
+  faCloudRain,
   faLocationDot,
+  faSnowflake,
+  faSun,
 } from "@fortawesome/free-solid-svg-icons";
 import type { MapStyleOption, ThemeMode } from "@/types/common";
+
+type WeatherOption = "sun" | "rain" | "snow";
 
 type FlyToState = {
   open: boolean;
@@ -27,6 +32,12 @@ interface Props {
   defaultZoom: number;
   showShadowTime: boolean;
   onToggleShadowTime: () => void;
+  weather: WeatherOption;
+  onChangeWeather: (weather: WeatherOption) => void;
+  rainDensity: number;
+  snowDensity: number;
+  onChangeRainDensity: (value: number) => void;
+  onChangeSnowDensity: (value: number) => void;
   mapControlsRef?: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -46,8 +57,16 @@ export const EditorToolbar = ({
   defaultZoom,
   showShadowTime,
   onToggleShadowTime,
+  weather,
+  onChangeWeather,
+  rainDensity,
+  snowDensity,
+  onChangeRainDensity,
+  onChangeSnowDensity,
   mapControlsRef,
 }: Props) => {
+  const [weatherMenuOpen, setWeatherMenuOpen] = useState(false);
+  const weatherMenuRef = useRef<HTMLDivElement | null>(null);
   const [flyTo, setFlyTo] = useState<FlyToState>({
     open: false,
     lat: "10.8231",
@@ -93,6 +112,50 @@ export const EditorToolbar = ({
     "inline-flex items-center gap-2 rounded-full border border-[var(--btn-border)] bg-[var(--btn-bg)] px-2 py-1 text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]";
   const buttonPrimaryClassName =
     "border-[var(--btn-active-border)] bg-[var(--btn-active-bg)] text-[var(--btn-active-text)] shadow-[var(--btn-active-ring)]";
+
+  const weatherCycle: Record<WeatherOption, WeatherOption> = {
+    sun: "rain",
+    rain: "snow",
+    snow: "sun",
+  };
+  const weatherLabel: Record<WeatherOption, string> = {
+    sun: "Sun",
+    rain: "Rain",
+    snow: "Snow",
+  };
+  const weatherIcon: Record<WeatherOption, typeof faSun> = {
+    sun: faSun,
+    rain: faCloudRain,
+    snow: faSnowflake,
+  };
+  const weatherMenuClassName =
+    "absolute left-0 top-full z-[2100] mt-2 grid min-w-[120px] gap-1 rounded-lg border border-[var(--panel-border)] bg-[var(--panel-bg)] p-1 shadow-[var(--panel-shadow)]";
+  const weatherMenuItemClassName =
+    "flex h-8 items-center gap-2 rounded-md px-2 text-[11px] text-[var(--text)] transition hover:bg-[var(--btn-hover)]";
+  const weatherMenuItemActiveClassName =
+    "bg-[var(--btn-active-bg)] text-[var(--btn-active-text)]";
+  const weatherSliderClassName =
+    "h-8 w-full cursor-pointer accent-[var(--btn-active-bg)]";
+
+  useEffect(() => {
+    if (!weatherMenuOpen) {
+      return;
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) {
+        return;
+      }
+      if (weatherMenuRef.current?.contains(target)) {
+        return;
+      }
+      setWeatherMenuOpen(false);
+    };
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [weatherMenuOpen]);
 
   const handleFlyTo = () => {
     const lat = Number.parseFloat(flyTo.lat);
@@ -176,6 +239,67 @@ export const EditorToolbar = ({
               className={`transition-transform duration-200 ${theme === "dark" ? "rotate-180" : ""}`}
             />
           </button>
+        </div>
+
+        <div className={groupClassName}>
+          <span className={labelClassName}>Weather</span>
+          <div className="relative" ref={weatherMenuRef}>
+            <button
+              className={`${buttonBaseClassName} ${buttonWideClassName} gap-1`}
+              onClick={() => setWeatherMenuOpen((prev) => !prev)}
+              title={`Weather: ${weatherLabel[weather]}`}
+              aria-label={`Weather: ${weatherLabel[weather]}`}
+              type="button"
+            >
+              <FontAwesomeIcon icon={weatherIcon[weather]} />
+              {weatherLabel[weather]}
+            </button>
+            {weatherMenuOpen ? (
+              <div className={weatherMenuClassName} role="menu">
+                {(["sun", "rain", "snow"] as WeatherOption[]).map((option) => (
+                  <button
+                    key={option}
+                    className={`${weatherMenuItemClassName} ${weather === option ? weatherMenuItemActiveClassName : ""}`}
+                    onClick={() => {
+                      onChangeWeather(option);
+                      setWeatherMenuOpen(false);
+                    }}
+                    type="button"
+                    role="menuitem"
+                  >
+                    <FontAwesomeIcon icon={weatherIcon[option]} />
+                    {weatherLabel[option]}
+                  </button>
+                ))}
+                <div className="mt-1 rounded-md border border-[var(--divider)] bg-[var(--panel-bg)] px-2 py-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                    Rain Density
+                  </div>
+                  <input
+                    className={weatherSliderClassName}
+                    type="range"
+                    min="0.2"
+                    max="3"
+                    step="0.1"
+                    value={rainDensity}
+                    onChange={(event) => onChangeRainDensity(Number(event.target.value))}
+                  />
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                    Snow Density
+                  </div>
+                  <input
+                    className={weatherSliderClassName}
+                    type="range"
+                    min="0.2"
+                    max="3"
+                    step="0.1"
+                    value={snowDensity}
+                    onChange={(event) => onChangeSnowDensity(Number(event.target.value))}
+                  />
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
 
         <div className={groupLastClassName}>

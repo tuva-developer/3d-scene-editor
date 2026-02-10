@@ -8,7 +8,14 @@ import { tileLocalToLatLon, getMetersPerExtentUnit, clampZoom } from "@/componen
 import { requestVectorTile } from "@/components/map/data/tile/request";
 import { parseVectorTile } from "@/components/map/data/convert/vectorTile";
 import { parseTileInfo } from "@/components/map/data/tile/parseTile";
-import { createLightGroup, downloadModel, prepareModelForRender, transformModel } from "@/components/map/data/models/objModel";
+import {
+  createLightGroup,
+  type LightGroup,
+  type LightGroupOption,
+  downloadModel,
+  prepareModelForRender,
+  transformModel,
+} from "@/components/map/data/models/objModel";
 import { calculateSunDirectionMaplibre } from "@/components/map/shadow/ShadowHelper";
 import { MaplibreShadowMesh } from "@/components/map/shadow/ShadowGeometry";
 
@@ -57,12 +64,46 @@ type TileCacheEntry = DataTileInfo & {
   sceneTile?: THREE.Scene;
   overScaledTileID?: OverscaledTileID;
   objects?: ObjectInfo[];
+  lightGroup?: LightGroup;
+  isFullObject?: boolean;
 };
 
 type ModelCacheEntry = Model & {
   stateDownload?: DownloadState;
-  object3d?: THREE.Group;
+  object3d?: THREE.Object3D;
 };
+
+class ModelFetchQueue {
+  private active = 0;
+  private queue: Array<() => void> = [];
+  private readonly max: number;
+
+  constructor(max: number) {
+    this.max = max;
+  }
+
+  enqueue(job: () => void): void {
+    this.queue.push(job);
+    this.run();
+  }
+
+  private run(): void {
+    if (this.active >= this.max) {
+      return;
+    }
+    const job = this.queue.shift();
+    if (!job) {
+      return;
+    }
+    this.active += 1;
+    job();
+  }
+
+  done(): void {
+    this.active = Math.max(0, this.active - 1);
+    this.run();
+  }
+}
 
 export class ModelLayer implements CustomLayerInterface {
   id: string;
@@ -87,6 +128,8 @@ export class ModelLayer implements CustomLayerInterface {
   private onPick?: (info: PickHit) => void;
   private onPickFail?: () => void;
   private pickEnabled = true;
+  private lightOption: LightGroupOption | null = null;
+  private readonly modelFetchQueue = new ModelFetchQueue(6);
 
   constructor(opts: ModelLayerOptions & { onPick?: (info: PickHit) => void; onPickFail?: () => void }) {
     this.id = opts.id;
@@ -147,6 +190,16 @@ export class ModelLayer implements CustomLayerInterface {
       sunDir: calculateSunDirectionMaplibre(THREE.MathUtils.degToRad(altitude), THREE.MathUtils.degToRad(azimuth)),
       shadow,
     };
+  }
+
+  setLightOption(option: LightGroupOption): void {
+    this.lightOption = option;
+    this.tileCache.forEach((entry) => {
+      if (entry.lightGroup) {
+        this.applyLightOption(entry.lightGroup, option);
+      }
+    });
+    this.map?.triggerRepaint?.();
   }
 
   onAdd(map: Map, gl: WebGLRenderingContext): void {
@@ -343,6 +396,46 @@ export class ModelLayer implements CustomLayerInterface {
     scene.add(shadowGroup);
   }
 
+  private createBuildingGroup(scene: THREE.Scene): void {
+    const buildingGroup: THREE.Group = new THREE.Group();
+    buildingGroup.name = "building_group";
+    scene.add(buildingGroup);
+  }
+
+  private applyLightOption(light: LightGroup, option: LightGroupOption): void {
+    const { directional, hemisphere, ambient } = option;
+    if (directional) {
+      if (directional.intensity !== undefined) {
+        light.dirLight.intensity = directional.intensity;
+      }
+      if (directional.color !== undefined) {
+        light.dirLight.color.set(directional.color);
+      }
+      if (directional.direction !== undefined) {
+        light.dirLight.target.position.copy(directional.direction.clone().multiplyScalar(5000));
+      }
+    }
+    if (hemisphere) {
+      if (hemisphere.intensity !== undefined) {
+        light.hemiLight.intensity = hemisphere.intensity;
+      }
+      if (hemisphere.skyColor !== undefined) {
+        light.hemiLight.color.set(hemisphere.skyColor);
+      }
+      if (hemisphere.groundColor !== undefined) {
+        light.hemiLight.groundColor.set(hemisphere.groundColor);
+      }
+    }
+    if (ambient) {
+      if (ambient.intensity !== undefined) {
+        light.ambientLight.intensity = ambient.intensity;
+      }
+      if (ambient.color !== undefined) {
+        light.ambientLight.color.set(ambient.color);
+      }
+    }
+  }
+
   private async requestAndParseTile(overScaledTileID: OverscaledTileID, entry: TileCacheEntry): Promise<void> {
     const c = overScaledTileID.canonical;
     const tileUrl = this.buildTileUrl(c.z, c.x, c.y);
@@ -363,10 +456,15 @@ export class ModelLayer implements CustomLayerInterface {
     entry.overScaledTileID = overScaledTileID;
     entry.sceneTile = new THREE.Scene();
     const dirLight = (this.sun?.sunDir ?? new THREE.Vector3(0.5, 0.5, 0.5)).clone().normalize();
-    createLightGroup(entry.sceneTile, dirLight);
+    const lightGroup = createLightGroup(entry.sceneTile, dirLight);
+    entry.lightGroup = lightGroup;
+    if (this.lightOption) {
+      this.applyLightOption(lightGroup, this.lightOption);
+    }
     if (this.sun) {
       this.createShadowGroup(entry.sceneTile);
     }
+    this.createBuildingGroup(entry.sceneTile);
     entry.state = "loaded";
     entry.stateDownload = "loaded";
   }
@@ -393,52 +491,87 @@ export class ModelLayer implements CustomLayerInterface {
 
       const modelUrl = this.rootUrl + (object.modelUrl as string);
       const textureUrl = this.rootUrl + (object.textureUrl as string);
+      this.fetchModel(modelUrl, textureUrl, model);
+    }
+  }
+
+  private createNullObject3D(): THREE.Object3D {
+    const obj = new THREE.Object3D();
+    obj.name = "__NULL_MODEL__";
+    obj.visible = false;
+    obj.matrixAutoUpdate = false;
+    (obj.userData as { isNull?: boolean }).isNull = true;
+    return obj;
+  }
+
+  private fetchModel(modelUrl: string, textureUrl: string, entry: ModelCacheEntry): void {
+    this.modelFetchQueue.enqueue(() => {
+      if (!modelUrl) {
+        entry.object3d = this.createNullObject3D();
+        entry.stateDownload = "loaded";
+        this.modelFetchQueue.done();
+        return;
+      }
       downloadModel(modelUrl)
         .then(async (obj3d) => {
-          if (model.stateDownload === "disposed") {
+          if (entry.stateDownload === "disposed") {
             return;
           }
           prepareModelForRender(obj3d as THREE.Object3D);
           obj3d.matrixAutoUpdate = false;
-          model.object3d = obj3d;
-          const textureLoader = new THREE.TextureLoader();
-          try {
-            const texture = await textureLoader.loadAsync(textureUrl);
-            obj3d.traverse((child) => {
-              if (child instanceof THREE.Mesh) {
-                const mat = child.material;
-                if (mat) {
-                  mat.map = texture;
-                  mat.needsUpdate = true;
+          entry.object3d = obj3d;
+          if (textureUrl) {
+            const textureLoader = new THREE.TextureLoader();
+            try {
+              const texture = await textureLoader.loadAsync(textureUrl);
+              obj3d.traverse((child) => {
+                if (child instanceof THREE.Mesh) {
+                  const mat = child.material;
+                  if (mat) {
+                    mat.map = texture;
+                    mat.needsUpdate = true;
+                  }
                 }
-              }
-            });
-            this.map?.triggerRepaint();
-          } catch (err) {
-            obj3d.traverse((child) => {
-              if (child instanceof THREE.Mesh) {
-                const edges = new THREE.EdgesGeometry(child.geometry);
-                const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
-                const edgeLines = new THREE.LineSegments(edges, edgeMaterial);
-                child.add(edgeLines);
-              }
-            });
-            this.map?.triggerRepaint();
+              });
+            } catch (err) {
+              obj3d.traverse((child) => {
+                if (child instanceof THREE.Mesh) {
+                  const edges = new THREE.EdgesGeometry(child.geometry);
+                  const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
+                  const edgeLines = new THREE.LineSegments(edges, edgeMaterial);
+                  child.add(edgeLines);
+                }
+              });
+            }
           }
-          model.stateDownload = "loaded";
+          entry.stateDownload = "loaded";
+          this.map?.triggerRepaint();
         })
         .catch((e) => {
-          model.stateDownload = "loaded";
+          entry.object3d = this.createNullObject3D();
+          entry.stateDownload = "loaded";
           console.warn("[ModelLayer] model failed:", e);
+        })
+        .finally(() => {
+          this.modelFetchQueue.done();
         });
-    }
+    });
   }
 
   private populateScene(tile: TileCacheEntry): void {
     if (!tile.sceneTile || !tile.objects || !tile.overScaledTileID) {
       return;
     }
-    if (tile.sceneTile.children.length === tile.objects.length) {
+    if (tile.isFullObject) {
+      return;
+    }
+    const buildingGroup = tile.sceneTile.getObjectByName("building_group") as THREE.Group | null;
+    const shadowGroup = tile.sceneTile.getObjectByName("shadow_group") as THREE.Group | null;
+    if (!buildingGroup) {
+      return;
+    }
+    if (buildingGroup.children.length === tile.objects.length) {
+      tile.isFullObject = true;
       return;
     }
     const z = tile.overScaledTileID.canonical.z;
@@ -479,16 +612,15 @@ export class ModelLayer implements CustomLayerInterface {
         isModelRoot: true,
       };
 
-      const mainScene = tile.sceneTile;
       cloneObj3d.traverse((child) => {
         if (child instanceof THREE.Mesh) {
           const objectShadow = new MaplibreShadowMesh(child);
           objectShadow.userData = { scale_unit: scaleUnit };
           objectShadow.matrixAutoUpdate = false;
-          mainScene.add(objectShadow);
+          shadowGroup?.add(objectShadow);
         }
       });
-      mainScene.add(cloneObj3d);
+      buildingGroup.add(cloneObj3d);
       this.map?.triggerRepaint();
     }
   }

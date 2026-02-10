@@ -6,10 +6,12 @@ import LayerNameModal from "@/components/ui/LayerNameModal";
 import InstanceLayerModal from "@/components/ui/InstanceLayerModal";
 import WaterLayerModal from "@/components/ui/WaterLayerModal";
 import WaterSettingsModal from "@/components/ui/WaterSettingsModal";
+import LightSettingsModal, { type LightIntensitySettings } from "@/components/ui/LightSettingsModal";
 import TimeShadowBar from "@/components/ui/TimeShadowBar";
 import TransformPanel from "@/components/ui/TransformPanel";
 import type { LayerModelInfo, LayerOption, MapStyleOption, ThemeMode, TransformMode, TransformValues } from "@/types/common";
 import type { MapViewHandle } from "@/components/map/MapView";
+import type { LightGroupOption } from "@/components/map/data/models/objModel";
 import { DEFAULT_WATER_SETTINGS, type WaterSettings } from "@/components/map/water/WaterMaterial";
 
 function App() {
@@ -95,6 +97,9 @@ function App() {
     return new Date(now.getFullYear(), now.getMonth(), now.getDate());
   });
   const [showShadowTime, setShowShadowTime] = useState(true);
+  const [weather, setWeather] = useState<"sun" | "rain" | "snow">("sun");
+  const [rainDensity, setRainDensity] = useState(1.4);
+  const [snowDensity, setSnowDensity] = useState(1.3);
   const [transformValues, setTransformValues] = useState<TransformValues | null>(null);
   const [instanceLayerModalOpen, setInstanceLayerModalOpen] = useState(false);
   const [instanceModelFiles, setInstanceModelFiles] = useState<File[]>([]);
@@ -105,8 +110,11 @@ function App() {
   const [waterTextureFile, setWaterTextureFile] = useState<File | null>(null);
   const [customWaterLayers, setCustomWaterLayers] = useState<LayerOption[]>([]);
   const [waterLayerSettings, setWaterLayerSettings] = useState<Record<string, WaterSettings>>({});
+  const [layerLightSettings, setLayerLightSettings] = useState<Record<string, LightIntensitySettings>>({});
   const [waterSettingsModalOpen, setWaterSettingsModalOpen] = useState(false);
   const [waterSettingsTargetId, setWaterSettingsTargetId] = useState<string | null>(null);
+  const [lightSettingsModalOpen, setLightSettingsModalOpen] = useState(false);
+  const [lightSettingsTargetId, setLightSettingsTargetId] = useState<string | null>(null);
   const instanceBlobUrlsRef = useRef<Map<string, string[]>>(new Map());
   const waterBlobUrlsRef = useRef<Map<string, string>>(new Map());
   const [styleId, setStyleId] = useState<string>(() => {
@@ -155,6 +163,44 @@ function App() {
     "https://images.daklak.gov.vn/v2/tile/{z}/{x}/{y}/306ec9b5-8146-4a83-9271-bd7b343a574a";
   const defaultWaterSourceLayer =
     (import.meta.env.VITE_WATER_SOURCE_LAYER as string | undefined)?.trim() || "region_river_index";
+  const defaultLightOption: LightGroupOption = {
+    directional: {
+      intensity: 5,
+    },
+    hemisphere: {
+      intensity: 2.5,
+    },
+    ambient: {
+      intensity: 1.2,
+    },
+  };
+  const defaultLightSettings: LightIntensitySettings = {
+    directional: defaultLightOption.directional?.intensity ?? 5,
+    hemisphere: defaultLightOption.hemisphere?.intensity ?? 2.5,
+    ambient: defaultLightOption.ambient?.intensity ?? 1.2,
+  };
+  const lightIntensityRange = { min: 0.2, max: 3, step: 0.05 };
+  const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+  const applyLightSettings = (layerId: string, settings: LightIntensitySettings) => {
+    const next: LightIntensitySettings = {
+      directional: clamp(settings.directional, lightIntensityRange.min, lightIntensityRange.max),
+      hemisphere: clamp(settings.hemisphere, lightIntensityRange.min, lightIntensityRange.max),
+      ambient: clamp(settings.ambient, lightIntensityRange.min, lightIntensityRange.max),
+    };
+    const option: LightGroupOption = {
+      directional: {
+        intensity: next.directional,
+      },
+      hemisphere: {
+        intensity: next.hemisphere,
+      },
+      ambient: {
+        intensity: next.ambient,
+      },
+    };
+    mapHandleRef.current?.setLayerLightOption(layerId, option);
+    setLayerLightSettings((prev) => ({ ...prev, [layerId]: next }));
+  };
 
   const revokeInstanceBlobUrls = (layerId?: string) => {
     if (layerId) {
@@ -345,6 +391,11 @@ function App() {
     setWaterSettingsModalOpen(true);
   };
 
+  const openLightSettingsModal = (layerId: string) => {
+    setLightSettingsTargetId(layerId);
+    setLightSettingsModalOpen(true);
+  };
+
   const handleConfirmLayerName = (name: string, _file: File | null, coords: { lat: number; lng: number } | null) => {
     const nextName = name || layerModalInitialName;
     const fallbackCenter = mapHandleRef.current?.getCenter() ?? { lat: mapCenter[1], lng: mapCenter[0] };
@@ -408,6 +459,9 @@ function App() {
           ref={mapHandleRef}
           mapControlsRef={mapControlsRef}
           showTileBoundaries={showTiles}
+          weather={weather}
+          rainDensity={rainDensity}
+          snowDensity={snowDensity}
           onSelectionChange={(selected) => {
             setHasSelection(selected);
             if (!selected) {
@@ -478,6 +532,14 @@ function App() {
           const isCustom = customInstanceLayers.some((layer) => layer.id === id);
           const isWater = customWaterLayers.some((layer) => layer.id === id);
           mapHandleRef.current?.removeLayer(id);
+          setLayerLightSettings((prev) => {
+            if (!(id in prev)) {
+              return prev;
+            }
+            const next = { ...prev };
+            delete next[id];
+            return next;
+          });
           if (isCustom) {
             revokeInstanceBlobUrls(id);
             setCustomInstanceLayers((prev) => prev.filter((layer) => layer.id !== id));
@@ -555,6 +617,7 @@ function App() {
         onAddInstanceLayer={openInstanceLayerModal}
         onAddWaterLayer={openWaterLayerModal}
         onEditWaterLayer={openWaterSettingsModal}
+        onEditLayerLight={openLightSettingsModal}
         isOpen={isLayerPanelOpen}
         onToggleOpen={() => setIsLayerPanelOpen((prev) => !prev)}
       />
@@ -615,6 +678,12 @@ function App() {
         }}
         showShadowTime={showShadowTime}
         onToggleShadowTime={() => setShowShadowTime((prev) => !prev)}
+        weather={weather}
+        onChangeWeather={setWeather}
+        rainDensity={rainDensity}
+        snowDensity={snowDensity}
+        onChangeRainDensity={setRainDensity}
+        onChangeSnowDensity={setSnowDensity}
         mapControlsRef={mapControlsRef}
       />
       <LayerNameModal
@@ -746,6 +815,34 @@ function App() {
           mapHandleRef.current?.setWaterLayerSettings(waterSettingsTargetId, settings);
           setWaterSettingsModalOpen(false);
           setWaterSettingsTargetId(null);
+        }}
+      />
+      <LightSettingsModal
+        open={lightSettingsModalOpen}
+        layerName={
+          (lightSettingsTargetId &&
+            layerOptions.find((layer) => layer.id === lightSettingsTargetId)?.label) ||
+          "Layer"
+        }
+        initialSettings={
+          (lightSettingsTargetId && layerLightSettings[lightSettingsTargetId]) || defaultLightSettings
+        }
+        defaultSettings={defaultLightSettings}
+        min={lightIntensityRange.min}
+        max={lightIntensityRange.max}
+        step={lightIntensityRange.step}
+        onCancel={() => {
+          setLightSettingsModalOpen(false);
+          setLightSettingsTargetId(null);
+        }}
+        onConfirm={(settings) => {
+          if (!lightSettingsTargetId) {
+            setLightSettingsModalOpen(false);
+            return;
+          }
+          applyLightSettings(lightSettingsTargetId, settings);
+          setLightSettingsModalOpen(false);
+          setLightSettingsTargetId(null);
         }}
       />
     </div>

@@ -31,6 +31,7 @@ interface Props {
   onCloneModel: (layerId: string, model: LayerModelInfo) => void;
   onDeleteModel: (layerId: string, model: LayerModelInfo) => void;
   onEditWaterLayer: (id: string) => void;
+  onEditLayerLight: (id: string) => void;
   onShowAll: () => void;
   onHideAll: () => void;
   onAddLayer: () => void;
@@ -55,6 +56,7 @@ export default function LayerPanel({
   onCloneModel,
   onDeleteModel,
   onEditWaterLayer,
+  onEditLayerLight,
   onShowAll,
   onHideAll,
   onAddLayer,
@@ -103,6 +105,18 @@ export default function LayerPanel({
   const nameStackClassName = "flex flex-col items-start gap-0.5";
   const buttonBaseClassName =
     "flex h-6 w-6 items-center justify-center rounded-md border border-[var(--btn-border)] bg-[var(--btn-bg)] text-[10px] text-[var(--text)] transition hover:border-[var(--btn-border-hover)] hover:bg-[var(--btn-hover)]";
+  const layerActionButtonBaseClassName =
+    "flex h-6 w-6 items-center justify-center rounded-md text-[10px] text-white transition hover:brightness-105";
+  const layerToggleButtonClassName =
+    `${layerActionButtonBaseClassName} bg-[#2f7df6]`;
+  const layerLightButtonClassName =
+    `${layerActionButtonBaseClassName} bg-[#f59e0b]`;
+  const layerAddButtonClassName =
+    `${layerActionButtonBaseClassName} bg-[#22c55e]`;
+  const layerWaterButtonClassName =
+    `${layerActionButtonBaseClassName} bg-[#14b8a6]`;
+  const layerDeleteButtonClassName =
+    `${layerActionButtonBaseClassName} bg-[#e35d4f]`;
   const buttonActiveClassName =
     "border-[var(--btn-active-border)] bg-[var(--btn-active-bg)] text-[var(--btn-active-text)] shadow-[var(--btn-active-ring)]";
   const buttonActiveNoShadowClassName =
@@ -329,6 +343,7 @@ export default function LayerPanel({
                     const isBase = kind === "base";
                     const isEditable = kind === "edit";
                     const isWater = kind === "water";
+                    const canEditLight = !isWater;
                     const isSelectable = kind === "edit";
                     const showIndicator = isSelectable;
                     const models = modelsByLayer[layer.id] ?? [];
@@ -341,7 +356,7 @@ export default function LayerPanel({
                         <div
                           className={`${rowClassName} ${isActive ? rowActiveClassName : ""} ${
                             isSelectable ? "cursor-pointer" : "cursor-default"
-                          } ${isExpanded && isEditable ? "rounded-b-none border-b border-[var(--seg-border)]/70 bg-[var(--panel-bg)]/40" : ""}`}
+                          } ${isExpanded && isEditable ? "rounded-b-none border-b border-(--seg-border)/70 bg-(--panel-bg)/40" : ""}`}
                           onClick={() => {
                             if (isSelectable) {
                               onSelectLayer(layer.id);
@@ -406,7 +421,7 @@ export default function LayerPanel({
                           </div>
                           <div className={rowRightClassName}>
                             <button
-                              className={`${buttonBaseClassName} ${isVisible ? buttonActiveNoShadowClassName : ""}`}
+                              className={layerToggleButtonClassName}
                               onClick={(event) => {
                                 event.stopPropagation();
                                 onToggleVisibility(layer.id, !isVisible);
@@ -421,11 +436,25 @@ export default function LayerPanel({
                                 style={{ shapeRendering: "geometricPrecision" }}
                               />
                             </button>
+                            {canEditLight ? (
+                              <button
+                                className={layerLightButtonClassName}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  onEditLayerLight(layer.id);
+                                }}
+                                title="Edit light settings"
+                                aria-label="Edit light settings"
+                                type="button"
+                              >
+                                <FontAwesomeIcon icon={faSliders} className="text-[9px]" />
+                              </button>
+                            ) : null}
                             {isBase ? null : (
                               <>
                                 {isEditable ? (
                                   <button
-                                    className={buttonBaseClassName}
+                                    className={layerAddButtonClassName}
                                     onClick={(event) => {
                                       event.stopPropagation();
                                       handleAddModel(layer.id);
@@ -439,7 +468,7 @@ export default function LayerPanel({
                                 ) : null}
                                 {isWater ? (
                                   <button
-                                    className={buttonBaseClassName}
+                                    className={layerWaterButtonClassName}
                                     onClick={(event) => {
                                       event.stopPropagation();
                                       onEditWaterLayer(layer.id);
@@ -452,7 +481,7 @@ export default function LayerPanel({
                                   </button>
                                 ) : null}
                                 <button
-                                  className={`${buttonBaseClassName} ${deleteButtonClassName}`}
+                                  className={layerDeleteButtonClassName}
                                   onClick={(event) => {
                                     event.stopPropagation();
                                     onDeleteLayer(layer.id);

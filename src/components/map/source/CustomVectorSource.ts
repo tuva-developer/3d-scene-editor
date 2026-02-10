@@ -35,6 +35,7 @@ export class CustomVectorSource implements CustomSource {
   map: maplibregl.Map | null = null;
   tileFetcher: TileFetcher = new TileFetcher(8);
   onUnloadTile: (tile_key: string) => void = () => {};
+  private unloadHandlers: Array<(tile_key: string) => void> = [];
   private worker: Worker | null = null;
   private tileCache: LRUCache<string, CustomVectorTileData>;
 
@@ -79,6 +80,15 @@ export class CustomVectorSource implements CustomSource {
 
   private unloadTile(tile_key: string) {
     this.onUnloadTile?.(tile_key);
+    for (const handler of this.unloadHandlers) {
+      handler?.(tile_key);
+    }
+  }
+
+  registerUnLoadTile(handler: (tile_key: string) => void): void {
+    if (handler) {
+      this.unloadHandlers.push(handler);
+    }
   }
 
   getTile(tile: OverscaledTileID, opts: GetTileOptions): CustomVectorTileData {

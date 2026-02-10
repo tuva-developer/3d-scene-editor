@@ -4,6 +4,30 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { tileLocalToLatLon } from "@/components/map/data/convert/coords";
 import type { ModelData } from "@/components/map/data/types";
 
+export type LightGroup = {
+  group: THREE.Group;
+  dirLight: THREE.DirectionalLight;
+  hemiLight: THREE.HemisphereLight;
+  ambientLight: THREE.AmbientLight;
+};
+
+export type LightGroupOption = {
+  directional?: {
+    intensity?: number;
+    color?: THREE.ColorRepresentation;
+    direction?: THREE.Vector3;
+  };
+  hemisphere?: {
+    intensity?: number;
+    skyColor?: THREE.ColorRepresentation;
+    groundColor?: THREE.ColorRepresentation;
+  };
+  ambient?: {
+    intensity?: number;
+    color?: THREE.ColorRepresentation;
+  };
+};
+
 export function createYupToZUpMatrix(): THREE.Matrix4 {
   const matrix = new THREE.Matrix4();
   matrix.set(1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1);
@@ -190,7 +214,7 @@ export function decomposeObject(model: THREE.Object3D): {
   };
 }
 
-export function createLightGroup(scene: THREE.Scene, dir?: THREE.Vector3): void {
+export function createLightGroup(scene: THREE.Scene, dir?: THREE.Vector3): LightGroup {
   const lightGroup = new THREE.Group();
   lightGroup.name = "light_group";
   const dirLight = new THREE.DirectionalLight(0xffffff, 5);
@@ -208,6 +232,12 @@ export function createLightGroup(scene: THREE.Scene, dir?: THREE.Vector3): void 
   ambientLight.color.setHSL(0.15, 0.2, 1);
   lightGroup.add(ambientLight);
   scene.add(lightGroup);
+  return {
+    group: lightGroup,
+    dirLight,
+    hemiLight,
+    ambientLight,
+  };
 }
 
 export function objectEnableClippingPlaneZ(object: THREE.Object3D, enable: boolean): void {
