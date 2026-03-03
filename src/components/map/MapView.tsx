@@ -147,7 +147,7 @@ const daylightPresets: Record<
     },
   },
   noon: {
-    tint: { color: "#ffffff", opacity: 0, blend: "normal" },
+    tint: { color: "#ffffff", opacity: 0, blend: "soft-light" },
     light: {
       directional: { intensity: 5, color: "#ffffff" },
       hemisphere: { intensity: 2.5, skyColor: "#ffffff", groundColor: "#ffffff" },
@@ -337,7 +337,6 @@ const WeatherOverlay = ({
           } else if (flake.x > width + 10) {
             flake.x = -10;
           }
-          ctx.globalAlpha = flake.alpha;
           const r = flake.r * 2.6;
           ctx.globalAlpha = Math.min(1, flake.alpha + 0.15);
           // Draw a simple 6-armed snowflake.
@@ -712,12 +711,10 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
       };
 
       map.current.on("style.load", handleStyleLoad);
-      map.current.on("load", handleStyleLoad);
 
       return () => {
         window.removeEventListener("resize", handleResize);
         map.current?.off("style.load", handleStyleLoad);
-        map.current?.off("load", handleStyleLoad);
         cleanupControls();
         if (map.current) {
           map.current.remove();
@@ -764,6 +761,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
       }
       applyDaylightToLayers(daylight);
     }, [daylight]);
+
 
     useImperativeHandle(ref, () => ({
       setTransformMode(m) {
@@ -982,13 +980,13 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
             );
             outlineLayer.setCurrentTileID(info.overScaledTileId);
             outlineLayer.attachObject(info.object);
-            onSelectionChange?.(true);
+            onSelectionChangeRef.current?.(true);
           },
           onPickFail: () => {
             overlayLayer.unselect();
             outlineLayer.unselect();
-            onSelectionChange?.(false);
-            onSelectionElevationChange?.(null);
+            onSelectionChangeRef.current?.(false);
+            onSelectionElevationChangeRef.current?.(null);
           },
         });
         editorLayer.setSunPos(sunPos.altitude, sunPos.azimuth);
@@ -1229,17 +1227,15 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
 
     return (
       <div ref={mapContainer} className="relative h-full w-full">
-        {daylightTint.opacity > 0 ? (
-          <div
-            className="pointer-events-none absolute inset-0 z-[6]"
-            style={{
-              backgroundColor: daylightTint.color,
-              opacity: daylightTint.opacity,
-              mixBlendMode: daylightTint.blend,
-            }}
-            aria-hidden="true"
-          />
-        ) : null}
+        <div
+          className="daylight-tint pointer-events-none absolute inset-0 z-[6]"
+          style={{
+            opacity: daylightTint.opacity,
+            mixBlendMode: daylightTint.blend,
+            backgroundColor: daylightTint.color,
+          }}
+          aria-hidden="true"
+        />
         <WeatherOverlay mode={weather} rainDensity={rainDensity} snowDensity={snowDensity} />
       </div>
     );

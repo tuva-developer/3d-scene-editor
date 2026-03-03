@@ -255,6 +255,10 @@ html, body, #root {
   background: var(--timebar-track);
 }
 
+.daylight-tint {
+  transition: background-color 500ms ease, opacity 500ms ease;
+}
+
 .layer-panel-scroll {
   scrollbar-width: thin;
   scrollbar-color: rgba(15, 23, 42, 0.35) transparent;

@@ -22,6 +22,9 @@ class OutlineLayer implements CustomLayerInterface {
   private applyGlobeMatrix = false;
   private currentTile: OverscaledTileID | null = null;
   private currentObject: THREE.Object3D | null = null;
+  private canvasWidth = 0;
+  private canvasHeight = 0;
+  private handleResize: (() => void) | null = null;
 
   constructor(opts: OutlineLayerOptions) {
     this.id = opts.id;
@@ -58,6 +61,42 @@ class OutlineLayer implements CustomLayerInterface {
     outlinePass.hiddenEdgeColor = new THREE.Color(0x000000);
   }
 
+  private getMapSize(): { width: number; height: number } {
+    if (!this.map) {
+      return { width: 0, height: 0 };
+    }
+    const rect = this.map.getCanvas().getBoundingClientRect();
+    return {
+      width: Math.max(1, Math.round(rect.width)),
+      height: Math.max(1, Math.round(rect.height)),
+    };
+  }
+
+  private syncSize(): void {
+    if (!this.renderer || !this.composer || !this.outlinePass || !this.canvas) {
+      return;
+    }
+    const { width, height } = this.getMapSize();
+    if (!width || !height) {
+      return;
+    }
+    if (width === this.canvasWidth && height === this.canvasHeight) {
+      return;
+    }
+    this.canvasWidth = width;
+    this.canvasHeight = height;
+    this.renderer.setSize(width, height, false);
+    this.canvas.style.width = `${width}px`;
+    this.canvas.style.height = `${height}px`;
+    const scale = 0.7;
+    this.composer.setSize(width * scale, height * scale);
+    if (typeof this.outlinePass.setSize === "function") {
+      this.outlinePass.setSize(width, height);
+    } else if ("resolution" in this.outlinePass) {
+      this.outlinePass.resolution.set(width, height);
+    }
+  }
+
   onAdd(map: Map): void {
     this.map = map;
     this.camera = new THREE.Camera();
@@ -72,7 +111,6 @@ class OutlineLayer implements CustomLayerInterface {
 
     const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
     this.renderer.setPixelRatio(pixelRatio);
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
 
     const canvas = this.renderer.domElement;
     this.canvas = canvas;
@@ -88,17 +126,29 @@ class OutlineLayer implements CustomLayerInterface {
     map.getContainer().appendChild(canvas);
 
     this.renderer.setClearColor(0x000000, 0);
-    this.renderer.setPixelRatio(1);
     this.composer = new EffectComposer(this.renderer);
     const scale = 0.7;
-    this.composer.setSize(window.innerWidth * scale, window.innerHeight * scale);
-    const outlinePass = new OutlinePass(new THREE.Vector2(window.innerWidth, window.innerHeight), this.scene, this.camera);
+    const { width, height } = this.getMapSize();
+    this.renderer.setSize(width, height, false);
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    this.composer.setSize(width * scale, height * scale);
+    const outlinePass = new OutlinePass(new THREE.Vector2(width, height), this.scene, this.camera);
     this.configOutlinePass(outlinePass);
     this.composer.addPass(outlinePass);
     this.outlinePass = outlinePass;
+
+    this.canvasWidth = width;
+    this.canvasHeight = height;
+    this.handleResize = () => this.syncSize();
+    map.on("resize", this.handleResize);
   }
 
   onRemove(): void {
+    if (this.handleResize && this.map) {
+      this.map.off("resize", this.handleResize);
+    }
+    this.handleResize = null;
     if (this.canvas?.parentElement) {
       this.canvas.parentElement.removeChild(this.canvas);
     }
@@ -130,6 +180,7 @@ class OutlineLayer implements CustomLayerInterface {
     if (!this.map || !this.camera || !this.renderer || !this.visible || !this.composer || !this.currentObject) {
       return;
     }
+    this.syncSize();
     if (this.currentTile) {
       this.renderer.clear(true, true, true);
       const tr = this.map.transform;
