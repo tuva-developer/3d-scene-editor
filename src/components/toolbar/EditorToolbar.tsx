@@ -11,6 +11,9 @@ import {
   faMoon,
   faSnowflake,
   faSun,
+  faRightToBracket,
+  faRightFromBracket,
+  faUserShield,
 } from "@fortawesome/free-solid-svg-icons";
 import type { ThemeMode } from "@/types/common";
 
@@ -60,6 +63,10 @@ interface Props {
   onChangeRainDensity: (value: number) => void;
   onChangeSnowDensity: (value: number) => void;
   mapControlsRef?: React.RefObject<HTMLDivElement | null>;
+  isEditor?: boolean;
+  editorUsername?: string;
+  onOpenLogin?: () => void;
+  onLogout?: () => void;
 }
 
 function clampTextValue(value: string): string {
@@ -84,6 +91,10 @@ export const EditorToolbar = ({
   onChangeRainDensity,
   onChangeSnowDensity,
   mapControlsRef,
+  isEditor = false,
+  editorUsername,
+  onOpenLogin,
+  onLogout,
 }: Props) => {
   const [weatherMenuOpen, setWeatherMenuOpen] = useState(false);
   const weatherMenuRef = useRef<HTMLDivElement | null>(null);
@@ -562,7 +573,7 @@ export const EditorToolbar = ({
           </div>
         </div>
 
-        <div className={groupLastClassName}>
+        <div className={groupClassName}>
           <span className={labelClassName}>View</span>
           <button
             className={`${buttonBaseClassName} ${buttonIconClassName} ${showTiles ? buttonActiveClassName : ""}`}
@@ -584,6 +595,38 @@ export const EditorToolbar = ({
           >
             <FontAwesomeIcon icon={faClock} />
           </button>
+        </div>
+
+        <div className={groupLastClassName}>
+          {isEditor ? (
+            <>
+              <span className="flex items-center gap-1.5 text-[11px] text-(--text-muted)">
+                <FontAwesomeIcon icon={faUserShield} className="text-(--btn-active-bg)" />
+                {editorUsername}
+              </span>
+              <button
+                className={`${buttonBaseClassName} ${buttonWideClassName} gap-1.5`}
+                onClick={onLogout}
+                type="button"
+                title="Đăng xuất"
+                aria-label="Đăng xuất"
+              >
+                <FontAwesomeIcon icon={faRightFromBracket} />
+                <span>Logout</span>
+              </button>
+            </>
+          ) : (
+            <button
+              className={`${buttonBaseClassName} ${buttonWideClassName} gap-1.5 ${buttonPrimaryClassName}`}
+              onClick={onOpenLogin}
+              type="button"
+              title="Đăng nhập Editor"
+              aria-label="Đăng nhập Editor"
+            >
+              <FontAwesomeIcon icon={faRightToBracket} />
+              <span>Login</span>
+            </button>
+          )}
         </div>
       </div>
 

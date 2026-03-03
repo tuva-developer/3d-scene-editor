@@ -9,6 +9,8 @@ import WaterSettingsModal from "@/components/ui/WaterSettingsModal";
 import LightSettingsModal, { type LightIntensitySettings } from "@/components/ui/LightSettingsModal";
 import TimeShadowBar from "@/components/ui/TimeShadowBar";
 import TransformPanel from "@/components/ui/TransformPanel";
+import LoginModal from "@/components/ui/LoginModal";
+import { useAuth } from "@/contexts/AuthContext";
 import type { LayerModelInfo, LayerOption, ThemeMode, TransformMode, TransformValues } from "@/types/common";
 import type { MapViewHandle } from "@/components/map/MapView";
 import type { LightGroupOption } from "@/components/map/data/models/objModel";
@@ -16,6 +18,8 @@ import { DEFAULT_WATER_SETTINGS, type WaterSettings } from "@/components/map/wat
 
 function App() {
   const styleUrl = (import.meta.env.VITE_STYLE_PATH as string | undefined)?.trim() ?? "";
+  const { isEditor, user, login, logout } = useAuth();
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
 
   const [mode, setMode] = useState<TransformMode>("translate");
   const [showTiles, setShowTiles] = useState<boolean>(false);
@@ -431,7 +435,7 @@ function App() {
         onLayerOptionsChange={setMapLayerOptions}
         />
       </div>
-      {showShadowTime ? (
+      {isEditor && showShadowTime ? (
         <TimeShadowBar
           minutes={sunMinutes}
           date={sunDate}
@@ -447,173 +451,177 @@ function App() {
           }}
         />
       ) : null}
-      <LayerPanel
-        layers={layerOptions}
-        activeLayerId={activeLayerId}
-        visibility={layerVisibility}
-        modelsByLayer={layerModels}
-        onSelectLayer={setActiveLayerId}
-        onToggleVisibility={(id, visible) => {
-          setLayerVisibility((prev) => ({ ...prev, [id]: visible }));
-          mapHandleRef.current?.setLayerVisibility(id, visible);
-        }}
-        onAddModel={(id) => {
-          if (id === "models") {
-            return;
-          }
-          openModelModal(id);
-        }}
-        onCloneModel={(layerId, model) => {
-          const clonedName = `${model.name} Copy`;
-          const cloned = createModelInfo(null, undefined, model.coords ?? null, clonedName);
-          const clonedOk =
-            mapHandleRef.current?.cloneModelInLayer(layerId, model.id, cloned.id) ?? false;
-          if (!clonedOk) {
-            return;
-          }
-          setLayerModels((prev) => ({
-            ...prev,
-            [layerId]: [...(prev[layerId] ?? []), { ...cloned, coords: model.coords ?? null }],
-          }));
-        }}
-        onDeleteModel={(layerId, model) => {
-          const removed = mapHandleRef.current?.removeModelFromLayer(layerId, model.id) ?? false;
-          if (!removed) {
-            return;
-          }
-          setLayerModels((prev) => ({
-            ...prev,
-            [layerId]: (prev[layerId] ?? []).filter((entry) => entry.id !== model.id),
-          }));
-        }}
-        onDeleteLayer={(id) => {
-          const isCustom = customInstanceLayers.some((layer) => layer.id === id);
-          const isWater = customWaterLayers.some((layer) => layer.id === id);
-          mapHandleRef.current?.removeLayer(id);
-          setLayerLightSettings((prev) => {
-            if (!(id in prev)) {
-              return prev;
-            }
-            const next = { ...prev };
-            delete next[id];
-            return next;
-          });
-          if (isCustom) {
-            revokeInstanceBlobUrls(id);
-            setCustomInstanceLayers((prev) => prev.filter((layer) => layer.id !== id));
-            setLayerVisibility((prev) => {
-              if (!(id in prev)) {
-                return prev;
+      {isEditor ? (
+        <>
+          <LayerPanel
+            layers={layerOptions}
+            activeLayerId={activeLayerId}
+            visibility={layerVisibility}
+            modelsByLayer={layerModels}
+            onSelectLayer={setActiveLayerId}
+            onToggleVisibility={(id, visible) => {
+              setLayerVisibility((prev) => ({ ...prev, [id]: visible }));
+              mapHandleRef.current?.setLayerVisibility(id, visible);
+            }}
+            onAddModel={(id) => {
+              if (id === "models") {
+                return;
               }
-              const next = { ...prev };
-              delete next[id];
-              return next;
-            });
-            return;
-          }
-          if (isWater) {
-            revokeWaterBlobUrls(id);
-            setCustomWaterLayers((prev) => prev.filter((layer) => layer.id !== id));
-            setLayerVisibility((prev) => {
-              if (!(id in prev)) {
-                return prev;
+              openModelModal(id);
+            }}
+            onCloneModel={(layerId, model) => {
+              const clonedName = `${model.name} Copy`;
+              const cloned = createModelInfo(null, undefined, model.coords ?? null, clonedName);
+              const clonedOk =
+                mapHandleRef.current?.cloneModelInLayer(layerId, model.id, cloned.id) ?? false;
+              if (!clonedOk) {
+                return;
               }
-              const next = { ...prev };
-              delete next[id];
-              return next;
-            });
-            setWaterLayerSettings((prev) => {
-              if (!(id in prev)) {
-                return prev;
+              setLayerModels((prev) => ({
+                ...prev,
+                [layerId]: [...(prev[layerId] ?? []), { ...cloned, coords: model.coords ?? null }],
+              }));
+            }}
+            onDeleteModel={(layerId, model) => {
+              const removed = mapHandleRef.current?.removeModelFromLayer(layerId, model.id) ?? false;
+              if (!removed) {
+                return;
               }
-              const next = { ...prev };
-              delete next[id];
-              return next;
-            });
-            return;
-          }
-          setLayerModels((prev) => {
-            if (!prev[id]) {
-              return prev;
-            }
-            const next = { ...prev };
-            delete next[id];
-            return next;
-          });
-        }}
-        onJumpToModel={(model) => {
-          if (!model.coords) {
-            return;
-          }
-          mapHandleRef.current?.flyToLatLng(model.coords.lat, model.coords.lng, 20);
-        }}
-        onShowAll={() => {
-          setLayerVisibility((prev) => {
-            const next: Record<string, boolean> = { ...prev };
-            layerOptions.forEach((layer) => {
-              next[layer.id] = true;
-            });
-            return next;
-          });
-          layerOptions.forEach((layer) => {
-            mapHandleRef.current?.setLayerVisibility(layer.id, true);
-          });
-        }}
-        onHideAll={() => {
-          setLayerVisibility((prev) => {
-            const next: Record<string, boolean> = { ...prev };
-            layerOptions.forEach((layer) => {
-              next[layer.id] = false;
-            });
-            return next;
-          });
-          layerOptions.forEach((layer) => {
-            mapHandleRef.current?.setLayerVisibility(layer.id, false);
-          });
-        }}
-        onAddLayer={openLayerModal}
-        onAddInstanceLayer={openInstanceLayerModal}
-        onAddWaterLayer={openWaterLayerModal}
-        onEditWaterLayer={openWaterSettingsModal}
-        onEditLayerLight={openLightSettingsModal}
-        isOpen={isLayerPanelOpen}
-        onToggleOpen={() => setIsLayerPanelOpen((prev) => !prev)}
-      />
-      <TransformPanel
-        values={transformValues}
-        disabled={!hasSelection}
-        mode={mode}
-        onChangeMode={(nextMode) => {
-          if (nextMode === "reset") {
-            mapHandleRef.current?.setTransformMode(nextMode);
-            return;
-          }
-          setMode(nextMode);
-          mapHandleRef.current?.setTransformMode(nextMode);
-        }}
-        onSnapToGround={() => {
-          mapHandleRef.current?.snapObjectSelectedToGround();
-        }}
-        enableClippingPlane={(enable) => {
-          mapHandleRef.current?.enableClippingPlanesObjectSelected(enable);
-        }}
-        enableFootPrintWhenEdit={(enable) => {
-          mapHandleRef.current?.enableFootPrintWhenEdit(enable);
-        }}
-        onChange={(next) => {
-          mapHandleRef.current?.setSelectedTransform(next);
-          setTransformValues((prev) => {
-            if (!prev) {
-              return prev;
-            }
-            return {
-              position: next.position ?? prev.position,
-              rotation: next.rotation ?? prev.rotation,
-              scale: next.scale ?? prev.scale,
-            };
-          });
-        }}
-      />
+              setLayerModels((prev) => ({
+                ...prev,
+                [layerId]: (prev[layerId] ?? []).filter((entry) => entry.id !== model.id),
+              }));
+            }}
+            onDeleteLayer={(id) => {
+              const isCustom = customInstanceLayers.some((layer) => layer.id === id);
+              const isWater = customWaterLayers.some((layer) => layer.id === id);
+              mapHandleRef.current?.removeLayer(id);
+              setLayerLightSettings((prev) => {
+                if (!(id in prev)) {
+                  return prev;
+                }
+                const next = { ...prev };
+                delete next[id];
+                return next;
+              });
+              if (isCustom) {
+                revokeInstanceBlobUrls(id);
+                setCustomInstanceLayers((prev) => prev.filter((layer) => layer.id !== id));
+                setLayerVisibility((prev) => {
+                  if (!(id in prev)) {
+                    return prev;
+                  }
+                  const next = { ...prev };
+                  delete next[id];
+                  return next;
+                });
+                return;
+              }
+              if (isWater) {
+                revokeWaterBlobUrls(id);
+                setCustomWaterLayers((prev) => prev.filter((layer) => layer.id !== id));
+                setLayerVisibility((prev) => {
+                  if (!(id in prev)) {
+                    return prev;
+                  }
+                  const next = { ...prev };
+                  delete next[id];
+                  return next;
+                });
+                setWaterLayerSettings((prev) => {
+                  if (!(id in prev)) {
+                    return prev;
+                  }
+                  const next = { ...prev };
+                  delete next[id];
+                  return next;
+                });
+                return;
+              }
+              setLayerModels((prev) => {
+                if (!prev[id]) {
+                  return prev;
+                }
+                const next = { ...prev };
+                delete next[id];
+                return next;
+              });
+            }}
+            onJumpToModel={(model) => {
+              if (!model.coords) {
+                return;
+              }
+              mapHandleRef.current?.flyToLatLng(model.coords.lat, model.coords.lng, 20);
+            }}
+            onShowAll={() => {
+              setLayerVisibility((prev) => {
+                const next: Record<string, boolean> = { ...prev };
+                layerOptions.forEach((layer) => {
+                  next[layer.id] = true;
+                });
+                return next;
+              });
+              layerOptions.forEach((layer) => {
+                mapHandleRef.current?.setLayerVisibility(layer.id, true);
+              });
+            }}
+            onHideAll={() => {
+              setLayerVisibility((prev) => {
+                const next: Record<string, boolean> = { ...prev };
+                layerOptions.forEach((layer) => {
+                  next[layer.id] = false;
+                });
+                return next;
+              });
+              layerOptions.forEach((layer) => {
+                mapHandleRef.current?.setLayerVisibility(layer.id, false);
+              });
+            }}
+            onAddLayer={openLayerModal}
+            onAddInstanceLayer={openInstanceLayerModal}
+            onAddWaterLayer={openWaterLayerModal}
+            onEditWaterLayer={openWaterSettingsModal}
+            onEditLayerLight={openLightSettingsModal}
+            isOpen={isLayerPanelOpen}
+            onToggleOpen={() => setIsLayerPanelOpen((prev) => !prev)}
+          />
+          <TransformPanel
+            values={transformValues}
+            disabled={!hasSelection}
+            mode={mode}
+            onChangeMode={(nextMode) => {
+              if (nextMode === "reset") {
+                mapHandleRef.current?.setTransformMode(nextMode);
+                return;
+              }
+              setMode(nextMode);
+              mapHandleRef.current?.setTransformMode(nextMode);
+            }}
+            onSnapToGround={() => {
+              mapHandleRef.current?.snapObjectSelectedToGround();
+            }}
+            enableClippingPlane={(enable) => {
+              mapHandleRef.current?.enableClippingPlanesObjectSelected(enable);
+            }}
+            enableFootPrintWhenEdit={(enable) => {
+              mapHandleRef.current?.enableFootPrintWhenEdit(enable);
+            }}
+            onChange={(next) => {
+              mapHandleRef.current?.setSelectedTransform(next);
+              setTransformValues((prev) => {
+                if (!prev) {
+                  return prev;
+                }
+                return {
+                  position: next.position ?? prev.position,
+                  rotation: next.rotation ?? prev.rotation,
+                  scale: next.scale ?? prev.scale,
+                };
+              });
+            }}
+          />
+        </>
+      ) : null}
       <EditorToolbar
         showTiles={showTiles}
         onToggleTiles={() => {
@@ -642,165 +650,182 @@ function App() {
         onChangeRainDensity={setRainDensity}
         onChangeSnowDensity={setSnowDensity}
         mapControlsRef={mapControlsRef}
+        isEditor={isEditor}
+        editorUsername={user?.username}
+        onOpenLogin={() => setLoginModalOpen(true)}
+        onLogout={logout}
       />
-      <LayerNameModal
-        open={layerModalOpen}
-        initialValue={layerModalInitialName}
-        onCancel={() => setLayerModalOpen(false)}
-        onConfirm={handleConfirmLayerName}
-        title="New Edit Layer"
-        confirmLabel="Create Layer"
-        showModelInput={false}
-        showCoordsInput={false}
-      />
-      <LayerNameModal
-        open={modelModalOpen}
-        initialValue=""
-        onCancel={() => {
-          setModelModalOpen(false);
-          setModelModalTargetId(null);
-        }}
-        onConfirm={(name, file, coords) => {
-          if (!modelModalTargetId) {
-            setModelModalOpen(false);
-            return;
-          }
-          handleConfirmAddModel(modelModalTargetId, name, file, coords);
-        }}
-        title={modelModalTitle}
-        subtitle="Choose a model to add to this layer."
-        confirmLabel="Add Model"
-        showNameInput={false}
-        showCoordsInput={true}
-        showModelInput={true}
-      />
-      <InstanceLayerModal
-        open={instanceLayerModalOpen}
-        defaultTileUrl={defaultInstanceTileUrl}
-        defaultSourceLayer={defaultInstanceSourceLayer}
-        defaultModelUrls={defaultInstanceModelUrls}
-        selectedFiles={instanceModelFiles}
-        onChangeFiles={setInstanceModelFiles}
-        onCancel={() => setInstanceLayerModalOpen(false)}
-        nameValue={instanceLayerName}
-        onChangeName={setInstanceLayerName}
-        onConfirm={(data) => {
-          const fileUrls =
-            data.modelFiles.length > 0
-              ? data.modelFiles.map((file) => URL.createObjectURL(file))
-              : [];
-          const layerId =
-            mapHandleRef.current?.addInstanceLayer({
-              tileUrl: data.tileUrl,
-              sourceLayer: data.sourceLayer,
-              modelUrls: fileUrls.length > 0 ? fileUrls : data.modelUrls,
-            }) ?? null;
-          if (!layerId) {
-            fileUrls.forEach((url) => URL.revokeObjectURL(url));
-            return;
-          }
-          if (fileUrls.length > 0) {
-            instanceBlobUrlsRef.current.set(layerId, fileUrls);
-          }
-          const label = data.name.trim() || instanceLayerName.trim() || `Custom Layer ${customLayerCount + 1}`;
-          setCustomInstanceLayers((prev) => [
-            ...prev,
-            { id: layerId, label, kind: "instance" },
-          ]);
-          setLayerVisibility((prev) => ({ ...prev, [layerId]: true }));
-          setInstanceLayerModalOpen(false);
-        }}
-      />
-      <WaterLayerModal
-        open={waterLayerModalOpen}
-        nameValue={waterLayerName}
-        onChangeName={setWaterLayerName}
-        defaultTileUrl={defaultWaterTileUrl}
-        defaultSourceLayer={defaultWaterSourceLayer}
-        selectedFile={waterTextureFile}
-        onChangeFile={setWaterTextureFile}
-        onCancel={() => setWaterLayerModalOpen(false)}
-        onConfirm={(data) => {
-          const textureUrl = data.file ? URL.createObjectURL(data.file) : undefined;
-          const settings = { ...DEFAULT_WATER_SETTINGS };
-          const layerId =
-            mapHandleRef.current?.addWaterLayer({
-              tileUrl: data.tileUrl,
-              sourceLayer: data.sourceLayer,
-              normalTextureUrl: textureUrl,
-              settings,
-            }) ?? null;
-          if (!layerId) {
-            if (textureUrl) {
-              URL.revokeObjectURL(textureUrl);
+      {isEditor ? (
+        <>
+          <LayerNameModal
+            open={layerModalOpen}
+            initialValue={layerModalInitialName}
+            onCancel={() => setLayerModalOpen(false)}
+            onConfirm={handleConfirmLayerName}
+            title="New Edit Layer"
+            confirmLabel="Create Layer"
+            showModelInput={false}
+            showCoordsInput={false}
+          />
+          <LayerNameModal
+            open={modelModalOpen}
+            initialValue=""
+            onCancel={() => {
+              setModelModalOpen(false);
+              setModelModalTargetId(null);
+            }}
+            onConfirm={(name, file, coords) => {
+              if (!modelModalTargetId) {
+                setModelModalOpen(false);
+                return;
+              }
+              handleConfirmAddModel(modelModalTargetId, name, file, coords);
+            }}
+            title={modelModalTitle}
+            subtitle="Choose a model to add to this layer."
+            confirmLabel="Add Model"
+            showNameInput={false}
+            showCoordsInput={true}
+            showModelInput={true}
+          />
+          <InstanceLayerModal
+            open={instanceLayerModalOpen}
+            defaultTileUrl={defaultInstanceTileUrl}
+            defaultSourceLayer={defaultInstanceSourceLayer}
+            defaultModelUrls={defaultInstanceModelUrls}
+            selectedFiles={instanceModelFiles}
+            onChangeFiles={setInstanceModelFiles}
+            onCancel={() => setInstanceLayerModalOpen(false)}
+            nameValue={instanceLayerName}
+            onChangeName={setInstanceLayerName}
+            onConfirm={(data) => {
+              const fileUrls =
+                data.modelFiles.length > 0
+                  ? data.modelFiles.map((file) => URL.createObjectURL(file))
+                  : [];
+              const layerId =
+                mapHandleRef.current?.addInstanceLayer({
+                  tileUrl: data.tileUrl,
+                  sourceLayer: data.sourceLayer,
+                  modelUrls: fileUrls.length > 0 ? fileUrls : data.modelUrls,
+                }) ?? null;
+              if (!layerId) {
+                fileUrls.forEach((url) => URL.revokeObjectURL(url));
+                return;
+              }
+              if (fileUrls.length > 0) {
+                instanceBlobUrlsRef.current.set(layerId, fileUrls);
+              }
+              const label = data.name.trim() || instanceLayerName.trim() || `Custom Layer ${customLayerCount + 1}`;
+              setCustomInstanceLayers((prev) => [
+                ...prev,
+                { id: layerId, label, kind: "instance" },
+              ]);
+              setLayerVisibility((prev) => ({ ...prev, [layerId]: true }));
+              setInstanceLayerModalOpen(false);
+            }}
+          />
+          <WaterLayerModal
+            open={waterLayerModalOpen}
+            nameValue={waterLayerName}
+            onChangeName={setWaterLayerName}
+            defaultTileUrl={defaultWaterTileUrl}
+            defaultSourceLayer={defaultWaterSourceLayer}
+            selectedFile={waterTextureFile}
+            onChangeFile={setWaterTextureFile}
+            onCancel={() => setWaterLayerModalOpen(false)}
+            onConfirm={(data) => {
+              const textureUrl = data.file ? URL.createObjectURL(data.file) : undefined;
+              const settings = { ...DEFAULT_WATER_SETTINGS };
+              const layerId =
+                mapHandleRef.current?.addWaterLayer({
+                  tileUrl: data.tileUrl,
+                  sourceLayer: data.sourceLayer,
+                  normalTextureUrl: textureUrl,
+                  settings,
+                }) ?? null;
+              if (!layerId) {
+                if (textureUrl) {
+                  URL.revokeObjectURL(textureUrl);
+                }
+                return;
+              }
+              if (textureUrl) {
+                waterBlobUrlsRef.current.set(layerId, textureUrl);
+              }
+              const label = data.name.trim() || waterLayerName.trim() || `Water Layer ${customWaterCount + 1}`;
+              setCustomWaterLayers((prev) => [
+                ...prev,
+                { id: layerId, label, kind: "water" },
+              ]);
+              setLayerVisibility((prev) => ({ ...prev, [layerId]: true }));
+              setWaterLayerSettings((prev) => ({ ...prev, [layerId]: settings }));
+              setWaterLayerModalOpen(false);
+            }}
+          />
+          <WaterSettingsModal
+            open={waterSettingsModalOpen}
+            layerName={
+              (waterSettingsTargetId &&
+                customWaterLayers.find((layer) => layer.id === waterSettingsTargetId)?.label) ||
+              "Water Layer"
             }
-            return;
-          }
-          if (textureUrl) {
-            waterBlobUrlsRef.current.set(layerId, textureUrl);
-          }
-          const label = data.name.trim() || waterLayerName.trim() || `Water Layer ${customWaterCount + 1}`;
-          setCustomWaterLayers((prev) => [
-            ...prev,
-            { id: layerId, label, kind: "water" },
-          ]);
-          setLayerVisibility((prev) => ({ ...prev, [layerId]: true }));
-          setWaterLayerSettings((prev) => ({ ...prev, [layerId]: settings }));
-          setWaterLayerModalOpen(false);
+            initialSettings={
+              (waterSettingsTargetId && waterLayerSettings[waterSettingsTargetId]) || DEFAULT_WATER_SETTINGS
+            }
+            onCancel={() => {
+              setWaterSettingsModalOpen(false);
+              setWaterSettingsTargetId(null);
+            }}
+            onConfirm={(settings) => {
+              if (!waterSettingsTargetId) {
+                setWaterSettingsModalOpen(false);
+                return;
+              }
+              setWaterLayerSettings((prev) => ({ ...prev, [waterSettingsTargetId]: settings }));
+              mapHandleRef.current?.setWaterLayerSettings(waterSettingsTargetId, settings);
+              setWaterSettingsModalOpen(false);
+              setWaterSettingsTargetId(null);
+            }}
+          />
+          <LightSettingsModal
+            open={lightSettingsModalOpen}
+            layerName={
+              (lightSettingsTargetId &&
+                layerOptions.find((layer) => layer.id === lightSettingsTargetId)?.label) ||
+              "Layer"
+            }
+            initialSettings={
+              (lightSettingsTargetId && layerLightSettings[lightSettingsTargetId]) || defaultLightSettings
+            }
+            defaultSettings={defaultLightSettings}
+            min={lightIntensityRange.min}
+            max={lightIntensityRange.max}
+            step={lightIntensityRange.step}
+            onCancel={() => {
+              setLightSettingsModalOpen(false);
+              setLightSettingsTargetId(null);
+            }}
+            onConfirm={(settings) => {
+              if (!lightSettingsTargetId) {
+                setLightSettingsModalOpen(false);
+                return;
+              }
+              applyLightSettings(lightSettingsTargetId, settings);
+              setLightSettingsModalOpen(false);
+              setLightSettingsTargetId(null);
+            }}
+          />
+        </>
+      ) : null}
+      <LoginModal
+        open={loginModalOpen}
+        onLogin={(username, password) => {
+          const ok = login(username, password);
+          if (ok) setLoginModalOpen(false);
+          return ok;
         }}
-      />
-      <WaterSettingsModal
-        open={waterSettingsModalOpen}
-        layerName={
-          (waterSettingsTargetId &&
-            customWaterLayers.find((layer) => layer.id === waterSettingsTargetId)?.label) ||
-          "Water Layer"
-        }
-        initialSettings={
-          (waterSettingsTargetId && waterLayerSettings[waterSettingsTargetId]) || DEFAULT_WATER_SETTINGS
-        }
-        onCancel={() => {
-          setWaterSettingsModalOpen(false);
-          setWaterSettingsTargetId(null);
-        }}
-        onConfirm={(settings) => {
-          if (!waterSettingsTargetId) {
-            setWaterSettingsModalOpen(false);
-            return;
-          }
-          setWaterLayerSettings((prev) => ({ ...prev, [waterSettingsTargetId]: settings }));
-          mapHandleRef.current?.setWaterLayerSettings(waterSettingsTargetId, settings);
-          setWaterSettingsModalOpen(false);
-          setWaterSettingsTargetId(null);
-        }}
-      />
-      <LightSettingsModal
-        open={lightSettingsModalOpen}
-        layerName={
-          (lightSettingsTargetId &&
-            layerOptions.find((layer) => layer.id === lightSettingsTargetId)?.label) ||
-          "Layer"
-        }
-        initialSettings={
-          (lightSettingsTargetId && layerLightSettings[lightSettingsTargetId]) || defaultLightSettings
-        }
-        defaultSettings={defaultLightSettings}
-        min={lightIntensityRange.min}
-        max={lightIntensityRange.max}
-        step={lightIntensityRange.step}
-        onCancel={() => {
-          setLightSettingsModalOpen(false);
-          setLightSettingsTargetId(null);
-        }}
-        onConfirm={(settings) => {
-          if (!lightSettingsTargetId) {
-            setLightSettingsModalOpen(false);
-            return;
-          }
-          applyLightSettings(lightSettingsTargetId, settings);
-          setLightSettingsModalOpen(false);
-          setLightSettingsTargetId(null);
-        }}
+        onCancel={() => setLoginModalOpen(false)}
       />
     </div>
   );
