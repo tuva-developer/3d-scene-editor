@@ -39,6 +39,8 @@ interface Props {
   onAddWaterLayer: () => void;
   isOpen: boolean;
   onToggleOpen: () => void;
+  embedded?: boolean;
+  showHeaderCollapseButton?: boolean;
 }
 
 type LayerKind = "base" | "edit" | "instance" | "water";
@@ -64,6 +66,8 @@ export default function LayerPanel({
   onAddWaterLayer,
   isOpen,
   onToggleOpen,
+  embedded = false,
+  showHeaderCollapseButton = true,
 }: Props) {
   const [expandedLayers, setExpandedLayers] = useState<Record<string, boolean>>({});
   const [groupExpanded, setGroupExpanded] = useState<Record<LayerKind, boolean>>({
@@ -86,7 +90,9 @@ export default function LayerPanel({
     }));
   };
   const panelClassName =
-    "absolute left-4 top-20 z-[2000] w-[300px] overflow-hidden rounded-lg border border-[var(--panel-border)] bg-[var(--panel-bg)] text-[var(--text)] shadow-[var(--panel-shadow)]";
+    embedded
+      ? "h-full w-full min-h-0 overflow-hidden bg-transparent text-[var(--text)]"
+      : "absolute left-4 top-20 z-[2000] w-[300px] overflow-hidden rounded-lg border border-[var(--panel-border)] bg-[var(--panel-bg)] text-[var(--text)] shadow-[var(--panel-shadow)]";
   const headerClassName =
     "sticky top-0 z-10 border-b border-[var(--divider)] bg-[var(--panel-bg)]/95 px-3 py-2 backdrop-blur";
   const titleClassName = "text-[12px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]";
@@ -96,7 +102,9 @@ export default function LayerPanel({
   const headerButtonClassName =
     "flex h-6 w-6 items-center justify-center rounded-md border border-[var(--btn-border)] bg-[var(--btn-bg)] text-[10px] text-[var(--text)] transition hover:border-[var(--btn-border-hover)] hover:bg-[var(--btn-hover)]";
   const listClassName =
-    "layer-panel-scroll flex max-h-[calc(100vh-220px)] flex-col gap-2.5 overflow-y-auto px-3 py-3";
+    embedded
+      ? "layer-panel-scroll flex h-full min-h-0 flex-col gap-2.5 overflow-y-auto px-3 py-3"
+      : "layer-panel-scroll flex max-h-[calc(100vh-220px)] flex-col gap-2.5 overflow-y-auto px-3 py-3";
   const rowClassName =
     "group grid grid-cols-[auto_1fr_auto] items-center gap-1.5 rounded-md border border-transparent bg-transparent px-2 py-1 transition hover:bg-[var(--seg-hover)]";
   const rowActiveClassName =
@@ -176,6 +184,7 @@ export default function LayerPanel({
       water: expanded,
     });
   };
+  const contentOpen = embedded ? true : isOpen;
 
   return (
     <div className={panelClassName} aria-label="Layer panel">
@@ -227,22 +236,24 @@ export default function LayerPanel({
                 style={{ shapeRendering: "geometricPrecision" }}
               />
             </button>
-            <button
-              className={headerButtonClassName}
-              onClick={onToggleOpen}
-              title={isOpen ? "Collapse panel" : "Expand panel"}
-              aria-label={isOpen ? "Collapse panel" : "Expand panel"}
-              type="button"
-            >
-              <FontAwesomeIcon
-                icon={faChevronDown}
-                className={`text-[10px] translate-y-[0.5px] ${expandIconClassName} ${isOpen ? "rotate-180" : ""}`}
-              />
-            </button>
+            {showHeaderCollapseButton ? (
+              <button
+                className={headerButtonClassName}
+                onClick={onToggleOpen}
+                title={isOpen ? "Collapse panel" : "Expand panel"}
+                aria-label={isOpen ? "Collapse panel" : "Expand panel"}
+                type="button"
+              >
+                <FontAwesomeIcon
+                  icon={faChevronDown}
+                  className={`text-[10px] translate-y-[0.5px] ${expandIconClassName} ${isOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+            ) : null}
           </div>
         </div>
       </div>
-      {isOpen ? (
+      {contentOpen ? (
         <div className={listClassName}>
         {(["base", "edit", "instance", "water"] as LayerKind[]).map((groupKind) => {
           const groupLayers = layersByKind[groupKind];

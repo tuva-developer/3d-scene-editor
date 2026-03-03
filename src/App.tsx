@@ -81,7 +81,6 @@ function App() {
     return stored === "light" ? "light" : "dark";
   });
   const mapHandleRef = useRef<MapViewHandle>(null);
-  const mapControlsRef = useRef<HTMLDivElement>(null);
   const mapCenter = useMemo(() => [106.6297, 10.8231] as [number, number], []);
   const editLayerCount = mapLayerOptions.filter((option) => option.id !== "models").length;
   const customLayerCount = customInstanceLayers.length;
@@ -417,7 +416,6 @@ function App() {
         styleUrl={styleUrl}
           activeLayerId={activeLayerId}
           ref={mapHandleRef}
-          mapControlsRef={mapControlsRef}
           showTileBoundaries={showTiles}
           weather={weather}
           daylight={daylight}
@@ -649,7 +647,6 @@ function App() {
         snowDensity={snowDensity}
         onChangeRainDensity={setRainDensity}
         onChangeSnowDensity={setSnowDensity}
-        mapControlsRef={mapControlsRef}
         isEditor={isEditor}
         editorUsername={user?.username}
         onOpenLogin={() => setLoginModalOpen(true)}

@@ -128,26 +128,14 @@ html, body, #root {
   color: #f8fafc;
 }
 
-
-.maplibregl-ctrl-bottom-right {
-  bottom: 16px;
-  right: 16px;
-}
-
 .maplibregl-ctrl-group {
   background: var(--map-ctrl-bg);
   border: 1px solid var(--map-ctrl-border);
   box-shadow: var(--map-ctrl-shadow);
-  border-radius: 12px;
-  overflow: hidden;
-  backdrop-filter: blur(8px);
 }
 
 .maplibregl-ctrl-group button {
-  width: 32px;
-  height: 32px;
   color: var(--text);
-  background: transparent;
 }
 
 .maplibregl-ctrl-group button:hover {
@@ -156,9 +144,6 @@ html, body, #root {
 
 .maplibregl-ctrl-group .maplibregl-ctrl-icon {
   filter: var(--map-ctrl-icon-filter);
-  width: 20px;
-  height: 20px;
-  background-size: 20px 20px;
 }
 
 .maplibregl-ctrl-group button.maplibregl-ctrl-compass .maplibregl-ctrl-icon {
@@ -166,12 +151,7 @@ html, body, #root {
   background-image: var(--map-compass-icon);
 }
 
-.maplibregl-ctrl-group button:disabled .maplibregl-ctrl-icon {
-  opacity: 0.4;
-}
-
 .maplibregl-ctrl-group button:focus {
-  outline: none;
   box-shadow: inset 0 0 0 1px var(--focus-ring);
 }
 
@@ -179,44 +159,13 @@ html, body, #root {
   border-top: 1px solid var(--map-ctrl-divider);
 }
 
-.maplibre-topbar-controls .maplibregl-ctrl {
-  margin: 0;
-}
-
-.maplibre-topbar-controls .maplibregl-ctrl-group {
-  display: inline-flex;
-  flex-direction: row;
-  align-items: stretch;
-  gap: 8px;
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-  border-radius: 0;
-  overflow: visible;
-}
-
-.maplibre-topbar-controls .maplibregl-ctrl-group button {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: 1px solid var(--btn-border);
-  background: var(--btn-bg);
-}
-
-.maplibre-topbar-controls .maplibregl-ctrl-group button:hover {
-  background: var(--btn-hover);
-  border-color: var(--btn-border-hover);
-}
-
 .maplibregl-ctrl-scale {
   color: var(--map-scale-text);
   background: var(--map-scale-bg);
-  border: 1px solid var(--map-scale-border);
+  border-color: var(--map-scale-border);
   box-shadow: var(--map-scale-shadow);
-  border-radius: 10px;
-  padding: 6px 8px;
-  backdrop-filter: blur(8px);
 }
+
 
 .time-slider {
   -webkit-appearance: none;
