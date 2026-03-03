@@ -14,6 +14,8 @@ import {
   faRightToBracket,
   faRightFromBracket,
   faUserShield,
+  faGear,
+  faXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import type { ThemeMode } from "@/types/common";
 
@@ -67,6 +69,8 @@ interface Props {
   editorUsername?: string;
   onOpenLogin?: () => void;
   onLogout?: () => void;
+  isSidePanelOpen?: boolean;
+  onToggleSidePanel?: () => void;
 }
 
 function clampTextValue(value: string): string {
@@ -95,6 +99,8 @@ export const EditorToolbar = ({
   editorUsername,
   onOpenLogin,
   onLogout,
+  isSidePanelOpen = true,
+  onToggleSidePanel,
 }: Props) => {
   const [weatherMenuOpen, setWeatherMenuOpen] = useState(false);
   const weatherMenuRef = useRef<HTMLDivElement | null>(null);
@@ -115,7 +121,7 @@ export const EditorToolbar = ({
   });
 
   const barClassName =
-    "absolute left-4 top-3 z-[2000] inline-flex max-w-[calc(100%-2rem)] flex-wrap items-center gap-2 rounded-lg border border-[var(--panel-border)] bg-[var(--panel-bg)] px-3 py-2 text-[var(--text)] shadow-[var(--panel-shadow)]";
+    "absolute left-4 top-3 z-[2200] inline-flex max-w-[calc(100%-2rem)] flex-wrap items-center gap-2 rounded-lg border border-[var(--panel-border)] bg-[var(--panel-bg)] px-3 py-2 text-[var(--text)] shadow-[var(--panel-shadow)]";
   const titleClassName =
     "text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]";
   const groupClassName =
@@ -175,7 +181,7 @@ export const EditorToolbar = ({
   const weatherSliderClassName =
     "h-8 w-full cursor-pointer accent-[var(--btn-active-bg)]";
   const searchInputClassName =
-    "h-9 w-[260px] rounded-full border border-[var(--btn-border)] bg-[var(--btn-bg)] px-9 text-[12px] text-[var(--text)] shadow-[var(--panel-shadow)] outline-none transition focus:border-[var(--btn-active-border)] focus:ring-2 focus:ring-[color:var(--focus-ring)]/40 placeholder:text-[var(--text-muted)]";
+    "h-9 w-[240px] rounded-full border border-[var(--btn-border)] bg-[var(--btn-bg)] px-9 text-[12px] text-[var(--text)] shadow-[var(--panel-shadow)] outline-none transition focus:border-[var(--btn-active-border)] focus:ring-2 focus:ring-[color:var(--focus-ring)]/40 placeholder:text-[var(--text-muted)]";
   const searchItemClassName =
     "flex min-h-8 items-start gap-2 text-left rounded-md px-2 py-1 text-[12px] transition";
   const daylightLabel: Record<DaylightMode, string> = {
@@ -367,74 +373,6 @@ export const EditorToolbar = ({
 
         <div className={groupClassName}>
           <span className={labelClassName}>Map</span>
-          <div className="relative" ref={searchRef}>
-            <label className="sr-only" htmlFor="map-search-input">
-              Search location
-            </label>
-            <input
-              id="map-search-input"
-              className={searchInputClassName}
-              value={searchValue}
-              placeholder="Search location"
-              onFocus={() => setSearchOpen(true)}
-              onChange={(event) => {
-                setSearchValue(event.target.value);
-                setSearchOpen(true);
-              }}
-              type="text"
-              autoComplete="off"
-            />
-            <span
-              className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 ${
-                theme === "dark" ? "text-slate-400" : "text-slate-400"
-              }`}
-            >
-              <FontAwesomeIcon icon={faLocationDot} />
-            </span>
-            {searchOpen && (searchLoading || searchError || searchResults.length > 0) ? (
-              <div
-              className="absolute left-0 top-full z-[2100] mt-2 w-[320px] rounded-xl border border-[var(--panel-border)] bg-[var(--panel-bg)] p-1 shadow-[var(--panel-shadow)] backdrop-blur"
-                role="listbox"
-              >
-                {searchLoading ? (
-                  <div className="px-2 py-1 text-[12px] text-[var(--text-muted)]">
-                    Searching...
-                  </div>
-                ) : null}
-                {geoLoading ? (
-                  <div className="px-2 py-1 text-[12px] text-[var(--text-muted)]">
-                    Locating...
-                  </div>
-                ) : null}
-                {searchError ? (
-                  <div className="px-2 py-1 text-[12px] text-rose-500">
-                    {searchError}
-                  </div>
-                ) : null}
-                {!searchLoading && !searchError && searchResults.length === 0 ? (
-                  <div className="px-2 py-1 text-[12px] text-[var(--text-muted)]">
-                    No results
-                  </div>
-                ) : null}
-                {searchResults.map((item) => (
-                  <button
-                    key={item}
-                    className={`${searchItemClassName} text-[var(--text)] hover:bg-[var(--btn-hover)]`}
-                    type="button"
-                    role="option"
-                    onClick={() => {
-                      handleSelectSuggestion(item);
-                    }}
-                  >
-                    <span className="mt-0.5 text-[var(--text-muted)]">
-                      <FontAwesomeIcon icon={faLocationDot} />
-                    </span>
-                    {item}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
           {mapControlsRef ? (
             <div
               className={mapControlsClassName}
@@ -450,6 +388,30 @@ export const EditorToolbar = ({
             aria-label="Fly To"
           >
             <FontAwesomeIcon icon={faLocationDot} />
+          </button>
+        </div>
+
+        <div className={groupClassName}>
+          <span className={labelClassName}>View</span>
+          <button
+            className={`${buttonBaseClassName} ${buttonIconClassName} ${showTiles ? buttonActiveClassName : ""}`}
+            onClick={onToggleTiles}
+            title="Tile Boundaries"
+            aria-label="Tile Boundaries"
+            type="button"
+          >
+            <FontAwesomeIcon icon={faBorderAll} />
+          </button>
+          <button
+            className={`${buttonBaseClassName} ${buttonIconClassName} ${showShadowTime ? buttonActiveClassName : ""}`}
+            onClick={onToggleShadowTime}
+            title={showShadowTime ? "Hide shadow time" : "Show shadow time"}
+            aria-label={
+              showShadowTime ? "Hide shadow time" : "Show shadow time"
+            }
+            type="button"
+          >
+            <FontAwesomeIcon icon={faClock} />
           </button>
         </div>
 
@@ -573,31 +535,86 @@ export const EditorToolbar = ({
           </div>
         </div>
 
-        <div className={groupClassName}>
-          <span className={labelClassName}>View</span>
-          <button
-            className={`${buttonBaseClassName} ${buttonIconClassName} ${showTiles ? buttonActiveClassName : ""}`}
-            onClick={onToggleTiles}
-            title="Tile Boundaries"
-            aria-label="Tile Boundaries"
-            type="button"
-          >
-            <FontAwesomeIcon icon={faBorderAll} />
-          </button>
-          <button
-            className={`${buttonBaseClassName} ${buttonIconClassName} ${showShadowTime ? buttonActiveClassName : ""}`}
-            onClick={onToggleShadowTime}
-            title={showShadowTime ? "Hide shadow time" : "Show shadow time"}
-            aria-label={
-              showShadowTime ? "Hide shadow time" : "Show shadow time"
-            }
-            type="button"
-          >
-            <FontAwesomeIcon icon={faClock} />
-          </button>
-        </div>
+        {onToggleSidePanel ? (
+          <div className={groupClassName}>
+            <span className={labelClassName}>Scene Panel</span>
+            <button
+              className={`${buttonBaseClassName} ${buttonIconClassName}`}
+              onClick={onToggleSidePanel}
+              title={isSidePanelOpen ? "Close Scene Panel" : "Open Scene Panel"}
+              aria-label={isSidePanelOpen ? "Close Scene Panel" : "Open Scene Panel"}
+              type="button"
+            >
+              <FontAwesomeIcon icon={faGear} />
+            </button>
+          </div>
+        ) : null}
 
         <div className={groupLastClassName}>
+          <div className="relative" ref={searchRef}>
+            <label className="sr-only" htmlFor="map-search-input">
+              Search location
+            </label>
+            <input
+              id="map-search-input"
+              className={searchInputClassName}
+              value={searchValue}
+              placeholder="Search location"
+              onFocus={() => setSearchOpen(true)}
+              onChange={(event) => {
+                setSearchValue(event.target.value);
+                setSearchOpen(true);
+              }}
+              type="text"
+              autoComplete="off"
+            />
+            <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400">
+              <FontAwesomeIcon icon={faLocationDot} />
+            </span>
+            {searchOpen && (searchLoading || searchError || searchResults.length > 0) ? (
+              <div
+                className="absolute right-0 top-full z-[2100] mt-2 w-[300px] rounded-xl border border-[var(--panel-border)] bg-[var(--panel-bg)] p-1 shadow-[var(--panel-shadow)] backdrop-blur"
+                role="listbox"
+              >
+                {searchLoading ? (
+                  <div className="px-2 py-1 text-[12px] text-[var(--text-muted)]">
+                    Searching...
+                  </div>
+                ) : null}
+                {geoLoading ? (
+                  <div className="px-2 py-1 text-[12px] text-[var(--text-muted)]">
+                    Locating...
+                  </div>
+                ) : null}
+                {searchError ? (
+                  <div className="px-2 py-1 text-[12px] text-rose-500">
+                    {searchError}
+                  </div>
+                ) : null}
+                {!searchLoading && !searchError && searchResults.length === 0 ? (
+                  <div className="px-2 py-1 text-[12px] text-[var(--text-muted)]">
+                    No results
+                  </div>
+                ) : null}
+                {searchResults.map((item) => (
+                  <button
+                    key={item}
+                    className={`${searchItemClassName} text-[var(--text)] hover:bg-[var(--btn-hover)]`}
+                    type="button"
+                    role="option"
+                    onClick={() => {
+                      handleSelectSuggestion(item);
+                    }}
+                  >
+                    <span className="mt-0.5 text-[var(--text-muted)]">
+                      <FontAwesomeIcon icon={faLocationDot} />
+                    </span>
+                    {item}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
           {isEditor ? (
             <>
               <span className="flex items-center gap-1.5 text-[11px] text-(--text-muted)">
@@ -608,8 +625,8 @@ export const EditorToolbar = ({
                 className={`${buttonBaseClassName} ${buttonWideClassName} gap-1.5`}
                 onClick={onLogout}
                 type="button"
-                title="Đăng xuất"
-                aria-label="Đăng xuất"
+                title="Logout"
+                aria-label="Logout"
               >
                 <FontAwesomeIcon icon={faRightFromBracket} />
                 <span>Logout</span>
@@ -620,8 +637,8 @@ export const EditorToolbar = ({
               className={`${buttonBaseClassName} ${buttonWideClassName} gap-1.5 ${buttonPrimaryClassName}`}
               onClick={onOpenLogin}
               type="button"
-              title="Đăng nhập Editor"
-              aria-label="Đăng nhập Editor"
+              title="Editor Login"
+              aria-label="Editor Login"
             >
               <FontAwesomeIcon icon={faRightToBracket} />
               <span>Login</span>

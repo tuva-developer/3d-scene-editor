@@ -40,6 +40,7 @@ interface Props {
   isOpen: boolean;
   onToggleOpen: () => void;
   embedded?: boolean;
+  showHeader?: boolean;
   showHeaderCollapseButton?: boolean;
 }
 
@@ -67,6 +68,7 @@ export default function LayerPanel({
   isOpen,
   onToggleOpen,
   embedded = false,
+  showHeader = true,
   showHeaderCollapseButton = true,
 }: Props) {
   const [expandedLayers, setExpandedLayers] = useState<Record<string, boolean>>({});
@@ -106,31 +108,28 @@ export default function LayerPanel({
       ? "layer-panel-scroll flex h-full min-h-0 flex-col gap-2.5 overflow-y-auto px-3 py-3"
       : "layer-panel-scroll flex max-h-[calc(100vh-220px)] flex-col gap-2.5 overflow-y-auto px-3 py-3";
   const rowClassName =
-    "group grid grid-cols-[auto_1fr_auto] items-center gap-1.5 rounded-md border border-transparent bg-transparent px-2 py-1 transition hover:bg-[var(--seg-hover)]";
+    "group rounded-md border border-transparent bg-transparent px-2 py-1.5 transition hover:bg-[var(--seg-hover)]";
+  const rowTopClassName = "flex items-center gap-2";
+  const rowBottomClassName = "mt-1.5 flex items-center gap-1";
   const rowActiveClassName =
     "bg-[var(--btn-active-bg)] text-[var(--btn-active-text)]";
-  const nameClassName = "text-[11px] font-semibold leading-tight tracking-[0.02em] text-[var(--text)]";
+  const nameClassName = "text-[12px] font-semibold leading-tight tracking-[0.01em] text-[var(--text)]";
   const nameStackClassName = "flex flex-col items-start gap-0.5";
   const buttonBaseClassName =
     "flex h-6 w-6 items-center justify-center rounded-md border border-[var(--btn-border)] bg-[var(--btn-bg)] text-[10px] text-[var(--text)] transition hover:border-[var(--btn-border-hover)] hover:bg-[var(--btn-hover)]";
   const layerActionButtonBaseClassName =
-    "flex h-6 w-6 items-center justify-center rounded-md text-[10px] text-white transition hover:brightness-105";
-  const layerToggleButtonClassName =
-    `${layerActionButtonBaseClassName} bg-[#2f7df6]`;
-  const layerLightButtonClassName =
-    `${layerActionButtonBaseClassName} bg-[#f59e0b]`;
-  const layerAddButtonClassName =
-    `${layerActionButtonBaseClassName} bg-[#22c55e]`;
-  const layerWaterButtonClassName =
-    `${layerActionButtonBaseClassName} bg-[#14b8a6]`;
-  const layerDeleteButtonClassName =
-    `${layerActionButtonBaseClassName} bg-[#e35d4f]`;
+    "flex h-6 w-6 items-center justify-center rounded-md border border-[var(--btn-border)] bg-[var(--btn-bg)] text-[10px] text-[var(--text)] transition hover:border-[var(--btn-border-hover)] hover:bg-[var(--btn-hover)]";
+  const layerToggleButtonClassName = layerActionButtonBaseClassName;
+  const layerLightButtonClassName = layerActionButtonBaseClassName;
+  const layerAddButtonClassName = layerActionButtonBaseClassName;
+  const layerWaterButtonClassName = layerActionButtonBaseClassName;
+  const layerDeleteButtonClassName = layerActionButtonBaseClassName;
   const buttonActiveClassName =
     "border-[var(--btn-active-border)] bg-[var(--btn-active-bg)] text-[var(--btn-active-text)] shadow-[var(--btn-active-ring)]";
   const buttonActiveNoShadowClassName =
     "border-[var(--btn-active-border)] bg-[var(--btn-active-bg)] text-[var(--btn-active-text)]";
   const deleteButtonClassName =
-    "border-[var(--btn-danger-border)] bg-[var(--btn-danger-bg)] text-[var(--btn-danger-text)] hover:!border-[var(--btn-danger-hover)] hover:!bg-[var(--btn-danger-hover)]";
+    "!border-[var(--btn-danger-border)] !bg-[var(--btn-danger-bg)] !text-[var(--btn-danger-text)] hover:!border-[var(--btn-danger-hover)] hover:!bg-[var(--btn-danger-hover)]";
   const badgeClassName =
     "inline-flex items-center rounded-full border border-[var(--seg-border)] bg-[var(--panel-bg)] px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] text-[var(--text-muted)]";
   const indicatorBaseClassName = "h-3 w-3 rounded-full";
@@ -139,8 +138,7 @@ export default function LayerPanel({
   const expandButtonClassName =
     "flex h-6 w-6 items-center justify-center rounded-md border border-[var(--btn-border)] bg-[var(--btn-bg)] text-[9px] text-[var(--text)] transition hover:border-[var(--btn-border-hover)] hover:bg-[var(--btn-hover)]";
   const expandIconClassName = "transition-transform";
-  const rowLeftClassName = "flex items-center gap-1";
-  const rowRightClassName = "flex items-center gap-1";
+  const rowActionsClassName = "flex w-full items-center gap-1";
   const modelListClassName =
     "mx-2 mb-2 mt-0 rounded-b-md border border-[var(--seg-border)] border-t-0 bg-[var(--panel-bg)]/40 px-2 py-1.5 text-[10px]";
   const modelItemClassName = "flex items-center justify-between gap-2 py-1";
@@ -149,7 +147,7 @@ export default function LayerPanel({
   const modelButtonClassName =
     "flex h-5 w-5 items-center justify-center rounded-md border border-[var(--btn-border)] bg-[var(--btn-bg)] text-[9px] text-[var(--text)] transition hover:border-[var(--btn-border-hover)] hover:bg-[var(--btn-hover)]";
   const modelDeleteButtonClassName =
-    "border-[var(--btn-danger-border)] bg-[var(--btn-danger-bg)] text-[var(--btn-danger-text)] hover:!border-[var(--btn-danger-hover)] hover:!bg-[var(--btn-danger-hover)]";
+    "!border-[var(--btn-danger-border)] !bg-[var(--btn-danger-bg)] !text-[var(--btn-danger-text)] hover:!border-[var(--btn-danger-hover)] hover:!bg-[var(--btn-danger-hover)]";
   const modelRowClassName =
     "border-b border-[var(--seg-border)]/60 last:border-b-0";
   const filteredLayers = layers;
@@ -164,9 +162,9 @@ export default function LayerPanel({
     layersByKind[kind].push(layer);
   });
   const groupHeaderClassName =
-    "flex items-center justify-between px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]";
+    "flex items-center justify-between px-2.5 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]";
   const groupHeaderToneClassName =
-    "bg-[var(--panel-bg)]/60";
+    "bg-[var(--panel-bg)]/40";
   const groupTitleClassName = "flex items-center gap-2";
   const groupToggleClassName =
     "flex h-6 w-6 items-center justify-center rounded-md border border-[var(--btn-border)] bg-[var(--btn-bg)] text-[9px] text-[var(--text)] transition hover:border-[var(--btn-border-hover)] hover:bg-[var(--btn-hover)]";
@@ -188,73 +186,126 @@ export default function LayerPanel({
 
   return (
     <div className={panelClassName} aria-label="Layer panel">
-      <div className={headerClassName}>
-        <div className={headerRowClassName}>
-          <div className={titleClassName}>Layers</div>
-          <div className={headerActionsClassName}>
-            <button
-              className={headerButtonClassName}
-              onClick={() => setAllGroups(true)}
-              title="Expand all groups"
-              aria-label="Expand all groups"
-              type="button"
-            >
-              <FontAwesomeIcon icon={faAnglesDown} className="text-[10px] translate-y-[0.5px]" />
-            </button>
-            <button
-              className={headerButtonClassName}
-              onClick={() => setAllGroups(false)}
-              title="Collapse all groups"
-              aria-label="Collapse all groups"
-              type="button"
-            >
-              <FontAwesomeIcon icon={faAnglesUp} className="text-[10px] translate-y-[0.5px]" />
-            </button>
-            <button
-              className={headerButtonClassName}
-              onClick={onShowAll}
-              title="Show all layers"
-              aria-label="Show all layers"
-              type="button"
-            >
-              <FontAwesomeIcon
-                icon={faEye}
-                className="text-[11px] translate-y-[0.5px]"
-                style={{ shapeRendering: "geometricPrecision" }}
-              />
-            </button>
-            <button
-              className={headerButtonClassName}
-              onClick={onHideAll}
-              title="Hide all layers"
-              aria-label="Hide all layers"
-              type="button"
-            >
-              <FontAwesomeIcon
-                icon={faEyeSlash}
-                className="text-[11px] translate-y-[0.5px]"
-                style={{ shapeRendering: "geometricPrecision" }}
-              />
-            </button>
-            {showHeaderCollapseButton ? (
+      {showHeader ? (
+        <div className={headerClassName}>
+          <div className={headerRowClassName}>
+            <div className={titleClassName}>Layers</div>
+            <div className={headerActionsClassName}>
               <button
                 className={headerButtonClassName}
-                onClick={onToggleOpen}
-                title={isOpen ? "Collapse panel" : "Expand panel"}
-                aria-label={isOpen ? "Collapse panel" : "Expand panel"}
+                onClick={() => setAllGroups(true)}
+                title="Expand all groups"
+                aria-label="Expand all groups"
+                type="button"
+              >
+                <FontAwesomeIcon icon={faAnglesDown} className="text-[10px] translate-y-[0.5px]" />
+              </button>
+              <button
+                className={headerButtonClassName}
+                onClick={() => setAllGroups(false)}
+                title="Collapse all groups"
+                aria-label="Collapse all groups"
+                type="button"
+              >
+                <FontAwesomeIcon icon={faAnglesUp} className="text-[10px] translate-y-[0.5px]" />
+              </button>
+              <button
+                className={headerButtonClassName}
+                onClick={onShowAll}
+                title="Show all layers"
+                aria-label="Show all layers"
                 type="button"
               >
                 <FontAwesomeIcon
-                  icon={faChevronDown}
-                  className={`text-[10px] translate-y-[0.5px] ${expandIconClassName} ${isOpen ? "rotate-180" : ""}`}
+                  icon={faEye}
+                  className="text-[11px] translate-y-[0.5px]"
+                  style={{ shapeRendering: "geometricPrecision" }}
                 />
               </button>
-            ) : null}
+              <button
+                className={headerButtonClassName}
+                onClick={onHideAll}
+                title="Hide all layers"
+                aria-label="Hide all layers"
+                type="button"
+              >
+                <FontAwesomeIcon
+                  icon={faEyeSlash}
+                  className="text-[11px] translate-y-[0.5px]"
+                  style={{ shapeRendering: "geometricPrecision" }}
+                />
+              </button>
+              {showHeaderCollapseButton ? (
+                <button
+                  className={headerButtonClassName}
+                  onClick={onToggleOpen}
+                  title={isOpen ? "Collapse panel" : "Expand panel"}
+                  aria-label={isOpen ? "Collapse panel" : "Expand panel"}
+                  type="button"
+                >
+                  <FontAwesomeIcon
+                    icon={faChevronDown}
+                    className={`text-[10px] translate-y-[0.5px] ${expandIconClassName} ${isOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
-      </div>
+      ) : null}
       {contentOpen ? (
         <div className={listClassName}>
+        {embedded ? (
+          <div className="sticky top-0 z-10">
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--seg-border)] bg-[var(--panel-bg)] px-2 py-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--section-heading)]">
+                Quick Actions
+              </span>
+              <div className="flex items-center gap-1">
+                <div className="inline-flex items-center gap-1 rounded-md border border-[var(--seg-border)] bg-[var(--seg-bg)] px-1 py-1">
+                  <button
+                    className="flex h-7 w-7 items-center justify-center rounded-md border border-[var(--btn-border)] bg-[var(--btn-bg)] text-[11px] text-[var(--text)] transition hover:border-[var(--btn-border-hover)] hover:bg-[var(--btn-hover)]"
+                    onClick={() => setAllGroups(true)}
+                    title="Expand all groups"
+                    aria-label="Expand all groups"
+                    type="button"
+                  >
+                    <FontAwesomeIcon icon={faAnglesDown} />
+                  </button>
+                  <button
+                    className="flex h-7 w-7 items-center justify-center rounded-md border border-[var(--btn-border)] bg-[var(--btn-bg)] text-[11px] text-[var(--text)] transition hover:border-[var(--btn-border-hover)] hover:bg-[var(--btn-hover)]"
+                    onClick={() => setAllGroups(false)}
+                    title="Collapse all groups"
+                    aria-label="Collapse all groups"
+                    type="button"
+                  >
+                    <FontAwesomeIcon icon={faAnglesUp} />
+                  </button>
+                </div>
+                <div className="inline-flex items-center gap-1 rounded-md border border-[var(--seg-border)] bg-[var(--seg-bg)] px-1 py-1">
+                  <button
+                    className="flex h-7 w-7 items-center justify-center rounded-md border border-[var(--btn-border)] bg-[var(--btn-bg)] text-[11px] text-[var(--text)] transition hover:border-[var(--btn-border-hover)] hover:bg-[var(--btn-hover)]"
+                    onClick={onShowAll}
+                    title="Show all layers"
+                    aria-label="Show all layers"
+                    type="button"
+                  >
+                    <FontAwesomeIcon icon={faEye} />
+                  </button>
+                  <button
+                    className="flex h-7 w-7 items-center justify-center rounded-md border border-[var(--btn-border)] bg-[var(--btn-bg)] text-[11px] text-[var(--text)] transition hover:border-[var(--btn-border-hover)] hover:bg-[var(--btn-hover)]"
+                    onClick={onHideAll}
+                    title="Hide all layers"
+                    aria-label="Hide all layers"
+                    type="button"
+                  >
+                    <FontAwesomeIcon icon={faEyeSlash} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
         {(["base", "edit", "instance", "water"] as LayerKind[]).map((groupKind) => {
           const groupLayers = layersByKind[groupKind];
           const isGroupOpen = groupExpanded[groupKind];
@@ -347,6 +398,11 @@ export default function LayerPanel({
               </div>
               {isGroupOpen ? (
                 <div className={groupItemsClassName}>
+                  {groupLayers.length === 0 ? (
+                    <div className="px-3 py-3 text-[11px] text-[var(--text-muted)]">
+                      No layers in this group.
+                    </div>
+                  ) : null}
                   {groupLayers.map((layer) => {
                     const isActive = activeLayerId === layer.id;
                     const isVisible = visibility[layer.id] ?? true;
@@ -385,114 +441,114 @@ export default function LayerPanel({
                             }
                           }}
                         >
-                          <div className={rowLeftClassName}>
-                            {isEditable ? (
+                          <div className={rowTopClassName}>
+                            <div className={`${nameStackClassName} min-w-0 flex-1`}>
+                              <div className={`${nameClassName} truncate`}>{layer.label}</div>
+                            </div>
+                          </div>
+                          <div className={rowBottomClassName}>
+                            <div className={rowActionsClassName}>
                               <button
-                                className={expandButtonClassName}
+                                className={`${layerToggleButtonClassName} ${isVisible ? buttonActiveNoShadowClassName : ""}`}
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  setExpandedLayers((prev) => ({
-                                    ...prev,
-                                    [layer.id]: !isExpanded,
-                                  }));
+                                  onToggleVisibility(layer.id, !isVisible);
                                 }}
-                                title={isExpanded ? "Collapse models" : "Expand models"}
-                                aria-label={isExpanded ? "Collapse models" : "Expand models"}
+                                title={isVisible ? "Hide layer" : "Show layer"}
+                                aria-label={isVisible ? "Hide layer" : "Show layer"}
                                 type="button"
                               >
+                                <FontAwesomeIcon
+                                  icon={isVisible ? faEye : faEyeSlash}
+                                  className="text-[11px]"
+                                  style={{ shapeRendering: "geometricPrecision" }}
+                                />
+                              </button>
+                              {isEditable ? (
+                                <button
+                                  className={expandButtonClassName}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setExpandedLayers((prev) => ({
+                                      ...prev,
+                                      [layer.id]: !isExpanded,
+                                    }));
+                                  }}
+                                  title={isExpanded ? "Collapse models" : "Expand models"}
+                                  aria-label={isExpanded ? "Collapse models" : "Expand models"}
+                                  type="button"
+                                >
                                   <FontAwesomeIcon
                                     icon={faChevronDown}
                                     className={`text-[9px] ${expandIconClassName} ${isExpanded ? "rotate-180" : ""}`}
                                   />
-                              </button>
-                            ) : null}
-                            {showIndicator ? (
-                              <button
-                                className={buttonBaseClassName}
-                                onClick={() => {
-                                  if (isSelectable) {
-                                    onSelectLayer(layer.id);
-                                  }
-                                }}
-                                title="Select layer"
-                                aria-label="Select layer"
-                                type="button"
-                                onMouseDown={(event) => event.stopPropagation()}
-                              >
-                                <span
-                                  className={`${indicatorBaseClassName} ${
-                                    isActive ? indicatorActiveClassName : indicatorInactiveClassName
-                                  }`}
-                                />
-                              </button>
-                            ) : null}
-                          </div>
-                          <div className={nameStackClassName}>
-                            <div className={nameClassName}>{layer.label}</div>
-                          </div>
-                          <div className={rowRightClassName}>
-                            <button
-                              className={layerToggleButtonClassName}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                onToggleVisibility(layer.id, !isVisible);
-                              }}
-                              title={isVisible ? "Hide layer" : "Show layer"}
-                              aria-label={isVisible ? "Hide layer" : "Show layer"}
-                              type="button"
-                            >
-                              <FontAwesomeIcon
-                                icon={isVisible ? faEye : faEyeSlash}
-                                className="text-[11px]"
-                                style={{ shapeRendering: "geometricPrecision" }}
-                              />
-                            </button>
-                            {canEditLight ? (
-                              <button
-                                className={layerLightButtonClassName}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  onEditLayerLight(layer.id);
-                                }}
-                                title="Edit light settings"
-                                aria-label="Edit light settings"
-                                type="button"
-                              >
-                                <FontAwesomeIcon icon={faSliders} className="text-[9px]" />
-                              </button>
-                            ) : null}
-                            {isBase ? null : (
-                              <>
-                                {isEditable ? (
-                                  <button
-                                    className={layerAddButtonClassName}
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      handleAddModel(layer.id);
-                                    }}
-                                    title="Add model to layer"
-                                    aria-label="Add model to layer"
-                                    type="button"
-                                  >
-                                    <FontAwesomeIcon icon={faPlus} className="text-[9px]" />
-                                  </button>
-                                ) : null}
-                                {isWater ? (
-                                  <button
-                                    className={layerWaterButtonClassName}
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      onEditWaterLayer(layer.id);
-                                    }}
-                                    title="Edit water settings"
-                                    aria-label="Edit water settings"
-                                    type="button"
-                                  >
-                                    <FontAwesomeIcon icon={faSliders} className="text-[9px]" />
-                                  </button>
-                                ) : null}
+                                </button>
+                              ) : null}
+                              {showIndicator ? (
                                 <button
-                                  className={layerDeleteButtonClassName}
+                                  className={buttonBaseClassName}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    if (isSelectable) {
+                                      onSelectLayer(layer.id);
+                                    }
+                                  }}
+                                  title="Select layer"
+                                  aria-label="Select layer"
+                                  type="button"
+                                >
+                                  <span
+                                    className={`${indicatorBaseClassName} ${
+                                      isActive ? indicatorActiveClassName : indicatorInactiveClassName
+                                    }`}
+                                  />
+                                </button>
+                              ) : null}
+                              {canEditLight ? (
+                                <button
+                                  className={layerLightButtonClassName}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    onEditLayerLight(layer.id);
+                                  }}
+                                  title="Edit light settings"
+                                  aria-label="Edit light settings"
+                                  type="button"
+                                >
+                                  <FontAwesomeIcon icon={faSliders} className="text-[9px]" />
+                                </button>
+                              ) : null}
+                              {isEditable ? (
+                                <button
+                                  className={layerAddButtonClassName}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleAddModel(layer.id);
+                                  }}
+                                  title="Add model to layer"
+                                  aria-label="Add model to layer"
+                                  type="button"
+                                >
+                                  <FontAwesomeIcon icon={faPlus} className="text-[9px]" />
+                                </button>
+                              ) : null}
+                              {isWater ? (
+                                <button
+                                  className={layerWaterButtonClassName}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    onEditWaterLayer(layer.id);
+                                  }}
+                                  title="Edit water settings"
+                                  aria-label="Edit water settings"
+                                  type="button"
+                                >
+                                  <FontAwesomeIcon icon={faSliders} className="text-[9px]" />
+                                </button>
+                              ) : null}
+                              {!isBase ? (
+                                <button
+                                  className={`${layerDeleteButtonClassName} ${deleteButtonClassName} ml-1`}
                                   onClick={(event) => {
                                     event.stopPropagation();
                                     onDeleteLayer(layer.id);
@@ -503,8 +559,8 @@ export default function LayerPanel({
                                 >
                                   <FontAwesomeIcon icon={faTrash} className="text-[10px]" />
                                 </button>
-                              </>
-                            )}
+                              ) : null}
+                            </div>
                           </div>
                         </div>
                         {isExpanded && isEditable ? (

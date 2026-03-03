@@ -23,7 +23,7 @@ export default function LoginModal({ open, onLogin, onCancel }: Props) {
     const ok = onLogin(username, password);
     setLoading(false);
     if (!ok) {
-      setError("Tên đăng nhập hoặc mật khẩu không đúng.");
+      setError("Invalid username or password.");
     } else {
       setUsername("");
       setPassword("");
@@ -50,21 +50,21 @@ export default function LoginModal({ open, onLogin, onCancel }: Props) {
     "flex-1 border-[var(--btn-active-border)] bg-[var(--btn-active-bg)] text-[var(--btn-active-text)] shadow-[var(--btn-active-ring)] hover:opacity-90";
 
   return (
-    <div className={overlayClassName} role="dialog" aria-modal="true" aria-label="Đăng nhập">
+    <div className={overlayClassName} role="dialog" aria-modal="true" aria-label="Login">
       <div className={panelClassName}>
-        <div className="flex items-center gap-2.5 mb-4">
+        <div className="mb-4 flex items-center gap-2.5">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--btn-active-border)] bg-[var(--btn-active-bg)] text-[var(--btn-active-text)]">
             <FontAwesomeIcon icon={faRightToBracket} />
           </span>
           <div>
             <div className={titleClassName}>Editor Login</div>
-            <div className={subtitleClassName}>Đăng nhập để sử dụng chức năng chỉnh sửa</div>
+            <div className={subtitleClassName}>Sign in to use editing features</div>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="grid gap-3">
           <label className="grid gap-1">
-            <span className={labelClassName}>Tên đăng nhập</span>
+            <span className={labelClassName}>Username</span>
             <div className={inputWrapperClassName}>
               <span className={inputIconClassName}>
                 <FontAwesomeIcon icon={faUser} />
@@ -82,7 +82,7 @@ export default function LoginModal({ open, onLogin, onCancel }: Props) {
           </label>
 
           <label className="grid gap-1">
-            <span className={labelClassName}>Mật khẩu</span>
+            <span className={labelClassName}>Password</span>
             <div className={inputWrapperClassName}>
               <span className={inputIconClassName}>
                 <FontAwesomeIcon icon={faLock} />
@@ -115,14 +115,14 @@ export default function LoginModal({ open, onLogin, onCancel }: Props) {
                 onCancel();
               }}
             >
-              Hủy
+              Cancel
             </button>
             <button
               type="submit"
               className={`${buttonBaseClassName} ${buttonPrimaryClassName}`}
               disabled={loading}
             >
-              {loading ? "Đang đăng nhập..." : "Đăng nhập"}
+              {loading ? "Signing in..." : "Sign in"}
             </button>
           </div>
         </form>

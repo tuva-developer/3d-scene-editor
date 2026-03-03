@@ -6,7 +6,7 @@ import { OverlayLayer } from "@/components/map/layers/OverlayLayer";
 import OutlineLayer from "@/components/map/layers/OutlineLayer";
 import { EditLayer } from "@/components/map/layers/EditLayer";
 import type { LayerOption, TransformMode, TransformValues } from "@/types/common";
-import { loadModelFromGlb, type LightGroupOption } from "@/components/map/data/models/objModel";
+import { decomposeObject, loadModelFromGlb, type LightGroupOption } from "@/components/map/data/models/objModel";
 import { getSunPosition, getSunPositionAt } from "@/components/map/shadow/ShadowHelper";
 import { MathUtils } from "three";
 import { CustomVectorSource } from "@/components/map/source/CustomVectorSource";
@@ -51,6 +51,7 @@ export interface MapViewHandle {
   getSelectedTransform(): TransformValues | null;
   setSelectedTransform(values: Partial<TransformValues>): void;
   flyToLatLng(lat: number, lng: number, zoom?: number): void;
+  flyToSelectedModel(zoom?: number): boolean;
   getCenter(): { lat: number; lng: number } | null;
   setLayerVisibility(id: string, visible: boolean): void;
   setLayerLightOption(id: string, option: LightGroupOption): void;
@@ -163,7 +164,7 @@ const daylightPresets: Record<
     },
   },
   night: {
-    tint: { color: "#471396", opacity: 0.45, blend: "multiply" },
+    tint: { color: "#222831", opacity: 0.6, blend: "multiply" },
     light: {
       directional: { intensity: 3.1, color: "#ffffff" },
       hemisphere: { intensity: 1.6, skyColor: "#ffffff", groundColor: "#ffffff" },
@@ -174,10 +175,12 @@ const daylightPresets: Record<
 
 const WeatherOverlay = ({
   mode,
+  daylight,
   rainDensity,
   snowDensity,
 }: {
   mode: WeatherMode;
+  daylight: DaylightMode;
   rainDensity: number;
   snowDensity: number;
 }) => {
@@ -297,8 +300,9 @@ const WeatherOverlay = ({
       ctx.clearRect(0, 0, width, height);
 
       if (mode === "rain") {
-        ctx.lineWidth = 1.1;
-        ctx.strokeStyle = "rgba(70, 120, 200, 0.85)";
+        const isNight = daylight === "night";
+        ctx.lineWidth = isNight ? 1.3 : 1.1;
+        ctx.strokeStyle = isNight ? "rgba(190, 225, 255, 0.95)" : "rgba(70, 120, 200, 0.88)";
         for (const drop of rainRef.current) {
           drop.x += drop.vx * dt;
           drop.y += drop.vy * dt;
@@ -322,8 +326,9 @@ const WeatherOverlay = ({
         }
         ctx.globalAlpha = 1;
       } else if (mode === "snow") {
-        ctx.fillStyle = "rgba(255, 255, 255, 0.98)";
-        ctx.strokeStyle = "rgba(120, 150, 180, 0.9)";
+        const isNight = daylight === "night";
+        ctx.fillStyle = isNight ? "rgba(255, 255, 255, 1)" : "rgba(255, 255, 255, 0.98)";
+        ctx.strokeStyle = isNight ? "rgba(210, 230, 255, 0.95)" : "rgba(120, 150, 180, 0.9)";
         ctx.lineWidth = 0.9;
         for (const flake of snowRef.current) {
           flake.x += flake.vx * dt;
@@ -367,7 +372,7 @@ const WeatherOverlay = ({
       }
       frameRef.current = null;
     };
-  }, [mode, rainDensity, snowDensity]);
+  }, [mode, rainDensity, snowDensity, daylight]);
 
   return (
     <canvas
@@ -863,6 +868,22 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
           essential: true,
         });
       },
+      flyToSelectedModel(zoom) {
+        if (!map.current) {
+          return false;
+        }
+        const currentObject = overlayLayerRef.current?.getCurrentObject();
+        if (!currentObject) {
+          return false;
+        }
+        const { latlon } = decomposeObject(currentObject);
+        map.current.flyTo({
+          center: [latlon.lon, latlon.lat],
+          zoom: typeof zoom === "number" ? zoom : Math.max(map.current.getZoom(), 19),
+          essential: true,
+        });
+        return true;
+      },
       getCenter() {
         if (!map.current) {
           return null;
@@ -1228,7 +1249,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
     return (
       <div ref={mapContainer} className="relative h-full w-full">
         <div
-          className="daylight-tint pointer-events-none absolute inset-0 z-[6]"
+          className="daylight-tint pointer-events-none absolute inset-0 z-[1]"
           style={{
             opacity: daylightTint.opacity,
             mixBlendMode: daylightTint.blend,
@@ -1236,7 +1257,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
           }}
           aria-hidden="true"
         />
-        <WeatherOverlay mode={weather} rainDensity={rainDensity} snowDensity={snowDensity} />
+        <WeatherOverlay mode={weather} daylight={daylight} rainDensity={rainDensity} snowDensity={snowDensity} />
       </div>
     );
   }

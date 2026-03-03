@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import MapView from "@/components/map/MapView";
 import { EditorToolbar } from "@/components/toolbar/EditorToolbar";
-import LayerPanel from "@/components/ui/LayerPanel";
 import LayerNameModal from "@/components/ui/LayerNameModal";
 import InstanceLayerModal from "@/components/ui/InstanceLayerModal";
 import WaterLayerModal from "@/components/ui/WaterLayerModal";
 import WaterSettingsModal from "@/components/ui/WaterSettingsModal";
 import LightSettingsModal, { type LightIntensitySettings } from "@/components/ui/LightSettingsModal";
 import TimeShadowBar from "@/components/ui/TimeShadowBar";
-import TransformPanel from "@/components/ui/TransformPanel";
 import LoginModal from "@/components/ui/LoginModal";
+import RightInspectorPanel from "@/components/ui/RightInspectorPanel";
 import { useAuth } from "@/contexts/AuthContext";
 import type { LayerModelInfo, LayerOption, ThemeMode, TransformMode, TransformValues } from "@/types/common";
 import type { MapViewHandle } from "@/components/map/MapView";
@@ -42,7 +41,9 @@ function App() {
   const [modelModalOpen, setModelModalOpen] = useState(false);
   const [modelModalTargetId, setModelModalTargetId] = useState<string | null>(null);
   const [modelModalTitle, setModelModalTitle] = useState("Add Model");
-  const [isLayerPanelOpen, setIsLayerPanelOpen] = useState(true);
+  const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [activeRightTab, setActiveRightTab] = useState<"layers" | "selection">("layers");
   const [sunMinutes, setSunMinutes] = useState(() => {
     const now = new Date();
     return now.getHours() * 60 + now.getMinutes();
@@ -273,6 +274,50 @@ function App() {
   }, [theme]);
 
   useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle("scene-panel-open", isEditor && isRightPanelOpen && !isFullscreen);
+    return () => {
+      root.classList.remove("scene-panel-open");
+    };
+  }, [isEditor, isRightPanelOpen, isFullscreen]);
+
+  useEffect(() => {
+    const syncFullscreenState = () => {
+      const hasNativeFullscreen =
+        Boolean(document.fullscreenElement) ||
+        Boolean((document as Document & { webkitFullscreenElement?: Element | null }).webkitFullscreenElement) ||
+        Boolean((document as Document & { mozFullScreenElement?: Element | null }).mozFullScreenElement) ||
+        Boolean((document as Document & { msFullscreenElement?: Element | null }).msFullscreenElement);
+      const hasPseudoFullscreen = Boolean(document.querySelector(".maplibregl-pseudo-fullscreen"));
+      setIsFullscreen(hasNativeFullscreen || hasPseudoFullscreen);
+    };
+    const handleFullscreenButtonClick = (event: Event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) {
+        return;
+      }
+      const button = target.closest("button.maplibregl-ctrl-fullscreen, button.maplibregl-ctrl-shrink");
+      if (!button) {
+        return;
+      }
+      window.setTimeout(syncFullscreenState, 0);
+    };
+    syncFullscreenState();
+    document.addEventListener("fullscreenchange", syncFullscreenState);
+    document.addEventListener("webkitfullscreenchange", syncFullscreenState as EventListener);
+    document.addEventListener("mozfullscreenchange", syncFullscreenState as EventListener);
+    document.addEventListener("MSFullscreenChange", syncFullscreenState as EventListener);
+    document.addEventListener("click", handleFullscreenButtonClick, true);
+    return () => {
+      document.removeEventListener("fullscreenchange", syncFullscreenState);
+      document.removeEventListener("webkitfullscreenchange", syncFullscreenState as EventListener);
+      document.removeEventListener("mozfullscreenchange", syncFullscreenState as EventListener);
+      document.removeEventListener("MSFullscreenChange", syncFullscreenState as EventListener);
+      document.removeEventListener("click", handleFullscreenButtonClick, true);
+    };
+  }, []);
+
+  useEffect(() => {
     setHasSelection(false);
     setHasChanges(false);
     setSelectionElevation(null);
@@ -326,6 +371,12 @@ function App() {
       window.cancelAnimationFrame(raf);
     };
   }, [hasSelection]);
+
+  useEffect(() => {
+    if (!hasSelection && activeRightTab === "selection") {
+      setActiveRightTab("layers");
+    }
+  }, [activeRightTab, hasSelection]);
 
   const openLayerModal = () => {
     const defaultName = `Edit Layer ${editLayerCount + 1}`;
@@ -407,6 +458,154 @@ function App() {
     setModelModalTargetId(null);
   };
 
+  const handleToggleLayerVisibility = (id: string, visible: boolean) => {
+    setLayerVisibility((prev) => ({ ...prev, [id]: visible }));
+    mapHandleRef.current?.setLayerVisibility(id, visible);
+  };
+
+  const handleAddModelToLayer = (id: string) => {
+    if (id === "models") {
+      return;
+    }
+    openModelModal(id);
+  };
+
+  const handleCloneLayerModel = (layerId: string, model: LayerModelInfo) => {
+    const clonedName = `${model.name} Copy`;
+    const cloned = createModelInfo(null, undefined, model.coords ?? null, clonedName);
+    const clonedOk = mapHandleRef.current?.cloneModelInLayer(layerId, model.id, cloned.id) ?? false;
+    if (!clonedOk) {
+      return;
+    }
+    setLayerModels((prev) => ({
+      ...prev,
+      [layerId]: [...(prev[layerId] ?? []), { ...cloned, coords: model.coords ?? null }],
+    }));
+  };
+
+  const handleDeleteLayerModel = (layerId: string, model: LayerModelInfo) => {
+    const removed = mapHandleRef.current?.removeModelFromLayer(layerId, model.id) ?? false;
+    if (!removed) {
+      return;
+    }
+    setLayerModels((prev) => ({
+      ...prev,
+      [layerId]: (prev[layerId] ?? []).filter((entry) => entry.id !== model.id),
+    }));
+  };
+
+  const handleDeleteLayer = (id: string) => {
+    const isCustom = customInstanceLayers.some((layer) => layer.id === id);
+    const isWater = customWaterLayers.some((layer) => layer.id === id);
+    mapHandleRef.current?.removeLayer(id);
+    setLayerLightSettings((prev) => {
+      if (!(id in prev)) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    if (isCustom) {
+      revokeInstanceBlobUrls(id);
+      setCustomInstanceLayers((prev) => prev.filter((layer) => layer.id !== id));
+      setLayerVisibility((prev) => {
+        if (!(id in prev)) {
+          return prev;
+        }
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      return;
+    }
+    if (isWater) {
+      revokeWaterBlobUrls(id);
+      setCustomWaterLayers((prev) => prev.filter((layer) => layer.id !== id));
+      setLayerVisibility((prev) => {
+        if (!(id in prev)) {
+          return prev;
+        }
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      setWaterLayerSettings((prev) => {
+        if (!(id in prev)) {
+          return prev;
+        }
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      return;
+    }
+    setLayerModels((prev) => {
+      if (!prev[id]) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
+
+  const handleJumpToModel = (model: LayerModelInfo) => {
+    if (!model.coords) {
+      return;
+    }
+    mapHandleRef.current?.flyToLatLng(model.coords.lat, model.coords.lng, 20);
+  };
+
+  const handleShowAllLayers = () => {
+    setLayerVisibility((prev) => {
+      const next: Record<string, boolean> = { ...prev };
+      layerOptions.forEach((layer) => {
+        next[layer.id] = true;
+      });
+      return next;
+    });
+    layerOptions.forEach((layer) => {
+      mapHandleRef.current?.setLayerVisibility(layer.id, true);
+    });
+  };
+
+  const handleHideAllLayers = () => {
+    setLayerVisibility((prev) => {
+      const next: Record<string, boolean> = { ...prev };
+      layerOptions.forEach((layer) => {
+        next[layer.id] = false;
+      });
+      return next;
+    });
+    layerOptions.forEach((layer) => {
+      mapHandleRef.current?.setLayerVisibility(layer.id, false);
+    });
+  };
+
+  const handleTransformModeChange = (nextMode: TransformMode) => {
+    if (nextMode === "reset") {
+      mapHandleRef.current?.setTransformMode(nextMode);
+      return;
+    }
+    setMode(nextMode);
+    mapHandleRef.current?.setTransformMode(nextMode);
+  };
+
+  const handleTransformChange = (next: Partial<TransformValues>) => {
+    mapHandleRef.current?.setSelectedTransform(next);
+    setTransformValues((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      return {
+        position: next.position ?? prev.position,
+        rotation: next.rotation ?? prev.rotation,
+        scale: next.scale ?? prev.scale,
+      };
+    });
+  };
+
   return (
     <div className="relative h-screen w-screen overflow-hidden">
       <div className="absolute inset-0">
@@ -422,7 +621,12 @@ function App() {
           rainDensity={rainDensity}
           snowDensity={snowDensity}
           onSelectionChange={(selected) => {
-            setHasSelection(selected);
+            setHasSelection((prev) => {
+              if (!prev && selected && isRightPanelOpen) {
+                setActiveRightTab("selection");
+              }
+              return selected;
+            });
             if (!selected) {
               setHasChanges(false);
               setSelectionElevation(null);
@@ -451,172 +655,46 @@ function App() {
       ) : null}
       {isEditor ? (
         <>
-          <LayerPanel
+          <RightInspectorPanel
+            isOpen={isRightPanelOpen}
+            activeTab={activeRightTab}
+            hasSelection={hasSelection}
+            onClose={() => setIsRightPanelOpen(false)}
+            onChangeTab={setActiveRightTab}
             layers={layerOptions}
             activeLayerId={activeLayerId}
             visibility={layerVisibility}
             modelsByLayer={layerModels}
             onSelectLayer={setActiveLayerId}
-            onToggleVisibility={(id, visible) => {
-              setLayerVisibility((prev) => ({ ...prev, [id]: visible }));
-              mapHandleRef.current?.setLayerVisibility(id, visible);
-            }}
-            onAddModel={(id) => {
-              if (id === "models") {
-                return;
-              }
-              openModelModal(id);
-            }}
-            onCloneModel={(layerId, model) => {
-              const clonedName = `${model.name} Copy`;
-              const cloned = createModelInfo(null, undefined, model.coords ?? null, clonedName);
-              const clonedOk =
-                mapHandleRef.current?.cloneModelInLayer(layerId, model.id, cloned.id) ?? false;
-              if (!clonedOk) {
-                return;
-              }
-              setLayerModels((prev) => ({
-                ...prev,
-                [layerId]: [...(prev[layerId] ?? []), { ...cloned, coords: model.coords ?? null }],
-              }));
-            }}
-            onDeleteModel={(layerId, model) => {
-              const removed = mapHandleRef.current?.removeModelFromLayer(layerId, model.id) ?? false;
-              if (!removed) {
-                return;
-              }
-              setLayerModels((prev) => ({
-                ...prev,
-                [layerId]: (prev[layerId] ?? []).filter((entry) => entry.id !== model.id),
-              }));
-            }}
-            onDeleteLayer={(id) => {
-              const isCustom = customInstanceLayers.some((layer) => layer.id === id);
-              const isWater = customWaterLayers.some((layer) => layer.id === id);
-              mapHandleRef.current?.removeLayer(id);
-              setLayerLightSettings((prev) => {
-                if (!(id in prev)) {
-                  return prev;
-                }
-                const next = { ...prev };
-                delete next[id];
-                return next;
-              });
-              if (isCustom) {
-                revokeInstanceBlobUrls(id);
-                setCustomInstanceLayers((prev) => prev.filter((layer) => layer.id !== id));
-                setLayerVisibility((prev) => {
-                  if (!(id in prev)) {
-                    return prev;
-                  }
-                  const next = { ...prev };
-                  delete next[id];
-                  return next;
-                });
-                return;
-              }
-              if (isWater) {
-                revokeWaterBlobUrls(id);
-                setCustomWaterLayers((prev) => prev.filter((layer) => layer.id !== id));
-                setLayerVisibility((prev) => {
-                  if (!(id in prev)) {
-                    return prev;
-                  }
-                  const next = { ...prev };
-                  delete next[id];
-                  return next;
-                });
-                setWaterLayerSettings((prev) => {
-                  if (!(id in prev)) {
-                    return prev;
-                  }
-                  const next = { ...prev };
-                  delete next[id];
-                  return next;
-                });
-                return;
-              }
-              setLayerModels((prev) => {
-                if (!prev[id]) {
-                  return prev;
-                }
-                const next = { ...prev };
-                delete next[id];
-                return next;
-              });
-            }}
-            onJumpToModel={(model) => {
-              if (!model.coords) {
-                return;
-              }
-              mapHandleRef.current?.flyToLatLng(model.coords.lat, model.coords.lng, 20);
-            }}
-            onShowAll={() => {
-              setLayerVisibility((prev) => {
-                const next: Record<string, boolean> = { ...prev };
-                layerOptions.forEach((layer) => {
-                  next[layer.id] = true;
-                });
-                return next;
-              });
-              layerOptions.forEach((layer) => {
-                mapHandleRef.current?.setLayerVisibility(layer.id, true);
-              });
-            }}
-            onHideAll={() => {
-              setLayerVisibility((prev) => {
-                const next: Record<string, boolean> = { ...prev };
-                layerOptions.forEach((layer) => {
-                  next[layer.id] = false;
-                });
-                return next;
-              });
-              layerOptions.forEach((layer) => {
-                mapHandleRef.current?.setLayerVisibility(layer.id, false);
-              });
-            }}
+            onToggleLayerVisibility={handleToggleLayerVisibility}
+            onAddModel={handleAddModelToLayer}
+            onCloneModel={handleCloneLayerModel}
+            onDeleteModel={handleDeleteLayerModel}
+            onDeleteLayer={handleDeleteLayer}
+            onJumpToModel={handleJumpToModel}
+            onShowAllLayers={handleShowAllLayers}
+            onHideAllLayers={handleHideAllLayers}
             onAddLayer={openLayerModal}
             onAddInstanceLayer={openInstanceLayerModal}
             onAddWaterLayer={openWaterLayerModal}
             onEditWaterLayer={openWaterSettingsModal}
             onEditLayerLight={openLightSettingsModal}
-            isOpen={isLayerPanelOpen}
-            onToggleOpen={() => setIsLayerPanelOpen((prev) => !prev)}
-          />
-          <TransformPanel
-            values={transformValues}
-            disabled={!hasSelection}
+            transformValues={transformValues}
             mode={mode}
-            onChangeMode={(nextMode) => {
-              if (nextMode === "reset") {
-                mapHandleRef.current?.setTransformMode(nextMode);
-                return;
-              }
-              setMode(nextMode);
-              mapHandleRef.current?.setTransformMode(nextMode);
-            }}
+            onChangeMode={handleTransformModeChange}
             onSnapToGround={() => {
               mapHandleRef.current?.snapObjectSelectedToGround();
             }}
-            enableClippingPlane={(enable) => {
+            onFlyToSelected={() => {
+              mapHandleRef.current?.flyToSelectedModel(19);
+            }}
+            onEnableClippingPlane={(enable) => {
               mapHandleRef.current?.enableClippingPlanesObjectSelected(enable);
             }}
-            enableFootPrintWhenEdit={(enable) => {
+            onEnableFootPrintWhenEdit={(enable) => {
               mapHandleRef.current?.enableFootPrintWhenEdit(enable);
             }}
-            onChange={(next) => {
-              mapHandleRef.current?.setSelectedTransform(next);
-              setTransformValues((prev) => {
-                if (!prev) {
-                  return prev;
-                }
-                return {
-                  position: next.position ?? prev.position,
-                  rotation: next.rotation ?? prev.rotation,
-                  scale: next.scale ?? prev.scale,
-                };
-              });
-            }}
+            onChangeTransform={handleTransformChange}
           />
         </>
       ) : null}
@@ -651,6 +729,19 @@ function App() {
         editorUsername={user?.username}
         onOpenLogin={() => setLoginModalOpen(true)}
         onLogout={logout}
+        isSidePanelOpen={isRightPanelOpen}
+        onToggleSidePanel={
+          isEditor
+            ? () =>
+                setIsRightPanelOpen((prev) => {
+                  const next = !prev;
+                  if (next && hasSelection) {
+                    setActiveRightTab("selection");
+                  }
+                  return next;
+                })
+            : undefined
+        }
       />
       {isEditor ? (
         <>

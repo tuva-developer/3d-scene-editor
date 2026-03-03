@@ -16,9 +16,13 @@ type TransformPanelProps = {
   mode: TransformMode;
   onChangeMode: (mode: TransformMode) => void;
   onSnapToGround: () => void;
+  onFlyToSelected?: () => void;
   enableClippingPlane: (enable: boolean) => void;
   enableFootPrintWhenEdit: (enable: boolean) => void;
   disabled?: boolean;
+  embedded?: boolean;
+  showHeader?: boolean;
+  showCollapseButton?: boolean;
 };
 
 type TransformGroupKey = "position" | "rotation" | "scale";
@@ -92,9 +96,13 @@ export default function TransformPanel({
   mode,
   onChangeMode,
   onSnapToGround,
+  onFlyToSelected,
   enableClippingPlane,
   enableFootPrintWhenEdit,
   disabled,
+  embedded = false,
+  showHeader = true,
+  showCollapseButton = true,
 }: TransformPanelProps) {
   const decimals = useMemo(() => ({ position: 4, rotation: 2, scale: 3 }), []);
   const [draft, setDraft] = useState<TransformDraft>(defaultDraft);
@@ -135,12 +143,16 @@ export default function TransformPanel({
   ];
 
   const panelClassName =
-    "absolute right-4 top-3 z-[2000] w-[260px] rounded-lg border border-[var(--panel-border)] bg-[var(--panel-bg)] text-[var(--text)] shadow-[var(--panel-shadow)]";
+    embedded
+      ? "h-full w-full min-h-0 overflow-hidden bg-transparent text-[var(--text)]"
+      : "absolute right-4 top-3 z-[2000] w-[260px] rounded-lg border border-[var(--panel-border)] bg-[var(--panel-bg)] text-[var(--text)] shadow-[var(--panel-shadow)]";
   const headerClassName = "flex items-center justify-between border-b border-[var(--divider)] px-3 py-2";
   const titleClassName = "text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]";
   const titleDisabledClassName = "text-[var(--btn-danger-text)]/70";
   const subtitleClassName = "text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]";
-  const contentClassName = "flex flex-col gap-3 px-3 py-2.5";
+  const contentClassName = embedded
+    ? "layer-panel-scroll flex h-full min-h-0 flex-col gap-3 overflow-y-auto px-3 py-2.5"
+    : "flex flex-col gap-3 px-3 py-2.5";
   const rowClassName = "grid grid-cols-[64px_1fr] items-center gap-2";
   const labelClassName = "text-[11px] font-semibold text-[var(--section-heading)]";
   const axisGridClassName = "grid grid-cols-[16px_1fr] items-center gap-1.5";
@@ -172,6 +184,7 @@ export default function TransformPanel({
     "rounded-lg border border-[var(--seg-border)] bg-[var(--panel-bg)]/60 p-2.5 shadow-[0_6px_16px_rgba(15,23,42,0.12)]";
 
   const isDisabled = disabled || !values;
+  const contentVisible = showCollapseButton ? !collapsed : true;
 
   const commitValue = (groupKey: TransformGroupKey, axisIndex: number) => {
     const nextValue = Number.parseFloat(draft[groupKey][axisIndex]);
@@ -241,22 +254,26 @@ export default function TransformPanel({
 
   return (
     <div className={panelClassName} aria-label="Selection panel">
-      <div className={headerClassName}>
-        <div className="flex flex-col gap-0.5">
-          <div className={`${titleClassName} ${isDisabled ? titleDisabledClassName : ""}`}>Selection</div>
-          {isDisabled ? <div className={subtitleClassName}>No selection</div> : null}
+      {showHeader ? (
+        <div className={headerClassName}>
+          <div className="flex flex-col gap-0.5">
+            <div className={`${titleClassName} ${isDisabled ? titleDisabledClassName : ""}`}>Selection</div>
+            {isDisabled ? <div className={subtitleClassName}>No selection</div> : null}
+          </div>
+          {showCollapseButton ? (
+            <button
+              className={collapseButtonClassName}
+              type="button"
+              onClick={() => setCollapsed((prev) => !prev)}
+              aria-label={collapsed ? "Expand selection panel" : "Collapse selection panel"}
+              title={collapsed ? "Expand" : "Collapse"}
+            >
+              <FontAwesomeIcon icon={collapsed ? faChevronDown : faChevronUp} />
+            </button>
+          ) : null}
         </div>
-        <button
-          className={collapseButtonClassName}
-          type="button"
-          onClick={() => setCollapsed((prev) => !prev)}
-          aria-label={collapsed ? "Expand selection panel" : "Collapse selection panel"}
-          title={collapsed ? "Expand" : "Collapse"}
-        >
-          <FontAwesomeIcon icon={collapsed ? faChevronDown : faChevronUp} />
-        </button>
-      </div>
-      {collapsed ? null : (
+      ) : null}
+      {contentVisible ? (
         <div className={contentClassName}>
           <div className={sectionCardClassName}>
             <div className={sectionTitleClassName}>Transform</div>
@@ -322,9 +339,17 @@ export default function TransformPanel({
 
           <div className={sectionCardClassName}>
             <div className={sectionTitleClassName}>Edit</div>
-            <div className="mt-2 grid grid-cols-2 gap-1.5">
+            <div className="mt-2 grid grid-cols-2 gap-2">
               <button
-                className={`${buttonBaseClassName} ${buttonWideClassName}`}
+                className={`${buttonBaseClassName} h-8 w-full px-2 text-[10px] font-semibold`}
+                onClick={onFlyToSelected}
+                disabled={isDisabled}
+                type="button"
+              >
+                Fly To
+              </button>
+              <button
+                className={`${buttonBaseClassName} h-8 w-full px-2 text-[10px] font-semibold`}
                 onClick={onSnapToGround}
                 disabled={isDisabled}
                 type="button"
@@ -332,7 +357,9 @@ export default function TransformPanel({
                 Snap
               </button>
               <button
-                className={`${buttonBaseClassName} ${buttonWideClassName} ${clippingEnabled ? segmentedButtonActiveClassName : ""}`}
+                className={`${buttonBaseClassName} h-8 w-full px-2 text-[10px] font-semibold ${
+                  clippingEnabled ? segmentedButtonActiveClassName : ""
+                }`}
                 onClick={handleToggleClip}
                 disabled={isDisabled}
                 type="button"
@@ -340,19 +367,20 @@ export default function TransformPanel({
                 <span
                   className={`${statusDotBaseClassName} ${clippingEnabled ? statusDotOnClassName : statusDotOffClassName}`}
                 />
-                <span className="ml-1">Clip</span>
+                <span className="ml-1.5">Clip</span>
               </button>
               <button
-                className={`${buttonBaseClassName} ${buttonWideClassName} ${footprintEnabled ? segmentedButtonActiveClassName : ""}`}
+                className={`${buttonBaseClassName} h-8 w-full px-2 text-[10px] font-semibold ${
+                  footprintEnabled ? segmentedButtonActiveClassName : ""
+                }`}
                 onClick={handleToggleFootprint}
                 disabled={isDisabled}
                 type="button"
-                style={{ gridColumn: "span 2" }}
               >
                 <span
                   className={`${statusDotBaseClassName} ${footprintEnabled ? statusDotOnClassName : statusDotOffClassName}`}
                 />
-                <span className="ml-1">Footprint</span>
+                <span className="ml-1.5">Footprint</span>
               </button>
             </div>
           </div>
@@ -482,7 +510,7 @@ export default function TransformPanel({
             </div>
           ))}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
