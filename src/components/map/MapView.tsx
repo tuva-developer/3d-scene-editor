@@ -13,9 +13,11 @@ import { CustomVectorSource } from "@/components/map/source/CustomVectorSource";
 import { WaterLayer } from "@/components/map/water/WaterLayer";
 import { normalizeWaterSettings, type WaterSettings } from "@/components/map/water/WaterMaterial";
 import { InstanceLayer } from "@/components/map/instance/InstanceLayer";
+import { latlonToLocal } from "@/components/map/data/convert/coords";
 
 type WeatherMode = "sun" | "rain" | "snow";
 type DaylightMode = "morning" | "noon" | "evening" | "night";
+const LAT_LIMIT = 85.05112878;
 
 interface MapViewProps {
   center?: [number, number];
@@ -55,6 +57,7 @@ export interface MapViewHandle {
   getCenter(): { lat: number; lng: number } | null;
   setLayerVisibility(id: string, visible: boolean): void;
   setLayerLightOption(id: string, option: LightGroupOption): void;
+  renameLayer(id: string, name: string): boolean;
   removeLayer(id: string): void;
   setSunTime(date: Date): void;
   addInstanceLayer(options: {
@@ -387,7 +390,7 @@ const WeatherOverlay = ({
 const MapView = forwardRef<MapViewHandle, MapViewProps>(
   (
     {
-      center = [106.6297, 10.8231],
+      center = [106.72135300000002, 10.796071],
       zoom = 12,
       styleUrl,
       activeLayerId,
@@ -521,6 +524,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
         style: stylePath,
         center,
         zoom,
+        pitch: 40,
         antialias: true,
         canvasContextAttributes,
       } as maplibregl.MapOptions & { antialias?: boolean };
@@ -805,12 +809,14 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
           return null;
         }
         const currentObject = overlay?.getCurrentObject();
+        const { latlon } = currentObject ? decomposeObject(currentObject) : { latlon: { lat: 0, lon: 0 } };
         const scaleUnit = (currentObject?.userData as { scaleUnit?: number } | undefined)?.scaleUnit ?? 1;
         const objectScaleX = Math.abs((transform.scale[0] ?? 1) / scaleUnit);
         const objectScaleY = Math.abs(transform.scale[1] ?? 1);
         const objectScaleZ = Math.abs((transform.scale[2] ?? 1) / scaleUnit);
         return {
-          position: transform.position,
+          // Expose position as geographic coordinates for panel editing.
+          position: [latlon.lat, latlon.lon, transform.position[2]],
           rotation: [
             MathUtils.radToDeg(transform.rotation[0]),
             MathUtils.radToDeg(transform.rotation[1]),
@@ -826,7 +832,19 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
         }
         const next: { position?: [number, number, number]; rotation?: [number, number, number]; scale?: [number, number, number] } = {};
         if (values.position) {
-          next.position = values.position;
+          const currentObject = overlay.getCurrentObject();
+          const currentTransform = overlay.getTransform();
+          const userData = currentObject?.userData as { tile?: { z?: number } } | undefined;
+          const tileZRaw = userData?.tile?.z;
+          const tileZ = Number.isFinite(tileZRaw as number) ? Number(tileZRaw) : Math.round(map.current?.getZoom() ?? 16);
+          const nextLat = Math.max(-LAT_LIMIT, Math.min(LAT_LIMIT, values.position[0]));
+          const nextLon = values.position[1];
+          const local = latlonToLocal(nextLon, nextLat, tileZ);
+          next.position = [
+            local.coordX,
+            local.coordY,
+            Number.isFinite(values.position[2]) ? values.position[2] : (currentTransform?.position[2] ?? 0),
+          ];
         }
         if (values.scale) {
           const currentObject = overlay.getCurrentObject();
@@ -927,6 +945,22 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
           entry.layer.setLightOption(option);
           map.current?.triggerRepaint();
         }
+      },
+      renameLayer(id, name) {
+        const nextName = name.trim();
+        if (!nextName || id === "models") {
+          return false;
+        }
+        const entry = editLayersRef.current.find((item) => item.layer.id === id);
+        if (!entry) {
+          return false;
+        }
+        entry.name = nextName;
+        onLayerOptionsChangeRef.current?.([
+          { id: "models", label: "Base Models", kind: "base" as const },
+          ...editLayersRef.current.map((item) => ({ id: item.layer.id, label: item.name, kind: "edit" as const })),
+        ]);
+        return true;
       },
       removeLayer(id) {
         if (id === "models") {

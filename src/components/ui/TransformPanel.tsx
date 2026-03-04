@@ -7,6 +7,8 @@ import {
   faRotate,
   faUpRightAndDownLeftFromCenter,
   faRotateLeft,
+  faLocationDot,
+  faArrowsDownToLine,
 } from "@fortawesome/free-solid-svg-icons";
 import type { TransformMode, TransformValues } from "@/types/common";
 
@@ -39,7 +41,7 @@ const defaultDraft: TransformDraft = {
   scale: ["1", "1", "1"],
 };
 
-const axisLabels: Array<"X" | "Y" | "Z"> = ["X", "Y", "Z"];
+const axisLabels = ["X", "Y", "Z"] as const;
 const scaleRange = { min: 0.01, max: 10, step: 0.01 };
 
 function formatNumber(value: number, decimals: number): string {
@@ -151,7 +153,7 @@ export default function TransformPanel({
   const titleDisabledClassName = "text-[var(--btn-danger-text)]/70";
   const subtitleClassName = "text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]";
   const contentClassName = embedded
-    ? "layer-panel-scroll flex h-full min-h-0 flex-col gap-3 overflow-y-auto px-3 py-2.5"
+    ? "flex h-full min-h-0 flex-col gap-3 px-3 py-2.5"
     : "flex flex-col gap-3 px-3 py-2.5";
   const rowClassName = "grid grid-cols-[64px_1fr] items-center gap-2";
   const labelClassName = "text-[11px] font-semibold text-[var(--section-heading)]";
@@ -161,10 +163,6 @@ export default function TransformPanel({
   const inputCompactClassName =
     "h-7 w-14 rounded-md border border-[var(--btn-border)] bg-[var(--btn-bg)] px-2 text-[11px] text-[var(--text)] outline-none transition focus:border-[var(--btn-active-border)] focus:ring-2 focus:ring-[color:var(--focus-ring)]/30 disabled:cursor-not-allowed disabled:opacity-50";
   const unitClassName = "ml-1 text-[10px] text-[var(--text-muted)]";
-  const segmentedClassName =
-    "inline-flex items-center gap-0.5 rounded-[8px] border border-[var(--seg-border)] bg-[var(--seg-bg)] p-[3px]";
-  const segmentedButtonBaseClassName =
-    "flex h-7 w-7 flex-none items-center justify-center rounded-md text-[12px] text-[var(--text)] transition hover:bg-[var(--seg-hover)]";
   const segmentedButtonActiveClassName =
     "bg-[var(--btn-active-bg)] text-[var(--btn-active-text)] shadow-[var(--btn-active-ring)]";
   const actionRowClassName = "flex items-center justify-between gap-2";
@@ -181,10 +179,25 @@ export default function TransformPanel({
   const statusDotOffClassName = "bg-rose-400/80 shadow-[0_0_6px_rgba(244,63,94,0.4)]";
   const sectionTitleClassName = "text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]";
   const sectionCardClassName =
-    "rounded-lg border border-[var(--seg-border)] bg-[var(--panel-bg)]/60 p-2.5 shadow-[0_6px_16px_rgba(15,23,42,0.12)]";
+    "rounded-lg border border-[var(--seg-border)] bg-[var(--seg-bg)] p-2.5";
+  const transformGroupContainerClassName = embedded
+    ? "flex min-h-0 flex-1 flex-col gap-3"
+    : "flex flex-col gap-3";
+  const transformGroupCardClassName = embedded
+    ? `${sectionCardClassName} min-h-0 flex flex-1 flex-col`
+    : sectionCardClassName;
 
   const isDisabled = disabled || !values;
   const contentVisible = showCollapseButton ? !collapsed : true;
+
+  const getAxisUnit = (groupKey: TransformGroupKey, axisIndex: number, fallbackUnit: string) => {
+    if (groupKey === "position") {
+      if (axisIndex === 0) return "lat";
+      if (axisIndex === 1) return "lon";
+      return "m";
+    }
+    return fallbackUnit;
+  };
 
   const commitValue = (groupKey: TransformGroupKey, axisIndex: number) => {
     const nextValue = Number.parseFloat(draft[groupKey][axisIndex]);
@@ -277,61 +290,59 @@ export default function TransformPanel({
         <div className={contentClassName}>
           <div className={sectionCardClassName}>
             <div className={sectionTitleClassName}>Transform</div>
-            <div className="mt-2 flex items-center gap-2">
-              <div
-                className="flex flex-1 items-center justify-between rounded-lg border border-(--seg-border) bg-(--seg-bg) px-2 py-1.5"
-              >
-                <div className="flex items-center gap-2" role="radiogroup" aria-label="Transform mode">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-(--text-muted)">
-                    Mode
-                  </span>
-                  <div className={segmentedClassName}>
-                    <button
-                      className={`${segmentedButtonBaseClassName} ${
-                        mode === "translate" ? segmentedButtonActiveClassName : ""
-                      }`}
-                      onClick={() => onChangeMode("translate")}
-                      title="Move"
-                      aria-label="Move"
-                      role="radio"
-                      aria-checked={mode === "translate"}
-                      disabled={isDisabled}
-                    >
-                      <FontAwesomeIcon icon={faUpDownLeftRight} />
-                    </button>
-                    <button
-                      className={`${segmentedButtonBaseClassName} ${mode === "rotate" ? segmentedButtonActiveClassName : ""}`}
-                      onClick={() => onChangeMode("rotate")}
-                      title="Rotate"
-                      aria-label="Rotate"
-                      role="radio"
-                      aria-checked={mode === "rotate"}
-                      disabled={isDisabled}
-                    >
-                      <FontAwesomeIcon icon={faRotate} />
-                    </button>
-                    <button
-                      className={`${segmentedButtonBaseClassName} ${mode === "scale" ? segmentedButtonActiveClassName : ""}`}
-                      onClick={() => onChangeMode("scale")}
-                      title="Scale"
-                      aria-label="Scale"
-                      role="radio"
-                      aria-checked={mode === "scale"}
-                      disabled={isDisabled}
-                    >
-                      <FontAwesomeIcon icon={faUpRightAndDownLeftFromCenter} />
-                    </button>
-                  </div>
+            <div className="mt-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="grid flex-1 grid-cols-3 gap-1 rounded-[8px] border border-[var(--seg-border)] bg-[var(--seg-bg)] p-[3px]" role="radiogroup" aria-label="Transform mode">
+                  <button
+                    className={`flex h-8 w-full items-center justify-center rounded-md text-[12px] text-[var(--text)] transition hover:bg-[var(--seg-hover)] ${
+                      mode === "translate" ? segmentedButtonActiveClassName : ""
+                    }`}
+                    onClick={() => onChangeMode("translate")}
+                    title="Move"
+                    aria-label="Move"
+                    role="radio"
+                    aria-checked={mode === "translate"}
+                    disabled={isDisabled}
+                  >
+                    <FontAwesomeIcon icon={faUpDownLeftRight} />
+                  </button>
+                  <button
+                    className={`flex h-8 w-full items-center justify-center rounded-md text-[12px] text-[var(--text)] transition hover:bg-[var(--seg-hover)] ${
+                      mode === "rotate" ? segmentedButtonActiveClassName : ""
+                    }`}
+                    onClick={() => onChangeMode("rotate")}
+                    title="Rotate"
+                    aria-label="Rotate"
+                    role="radio"
+                    aria-checked={mode === "rotate"}
+                    disabled={isDisabled}
+                  >
+                    <FontAwesomeIcon icon={faRotate} />
+                  </button>
+                  <button
+                    className={`flex h-8 w-full items-center justify-center rounded-md text-[12px] text-[var(--text)] transition hover:bg-[var(--seg-hover)] ${
+                      mode === "scale" ? segmentedButtonActiveClassName : ""
+                    }`}
+                    onClick={() => onChangeMode("scale")}
+                    title="Scale"
+                    aria-label="Scale"
+                    role="radio"
+                    aria-checked={mode === "scale"}
+                    disabled={isDisabled}
+                  >
+                    <FontAwesomeIcon icon={faUpRightAndDownLeftFromCenter} />
+                  </button>
                 </div>
-                <div className="h-6 w-px bg-(--seg-border)" />
                 <button
-                  className={`${buttonBaseClassName} ${buttonCompactClassName} ${buttonDangerClassName}`}
+                  className={`${buttonBaseClassName} h-8 min-w-[88px] px-2.5 text-[10px] font-semibold ${buttonDangerClassName}`}
                   onClick={() => onChangeMode("reset")}
-                  title="Reset"
-                  aria-label="Reset"
+                  title="Reset transform"
+                  aria-label="Reset transform"
                   disabled={isDisabled}
+                  type="button"
                 >
                   <FontAwesomeIcon icon={faRotateLeft} className="text-[10px]" />
+                  <span className="ml-1">Reset</span>
                 </button>
               </div>
             </div>
@@ -341,19 +352,23 @@ export default function TransformPanel({
             <div className={sectionTitleClassName}>Edit</div>
             <div className="mt-2 grid grid-cols-2 gap-2">
               <button
-                className={`${buttonBaseClassName} h-8 w-full px-2 text-[10px] font-semibold`}
+                className={`${buttonBaseClassName} h-8 w-full px-2 text-[10px] font-semibold gap-1.5`}
                 onClick={onFlyToSelected}
                 disabled={isDisabled}
                 type="button"
+                title="Fly to selected object"
               >
+                <FontAwesomeIcon icon={faLocationDot} className="text-[10px]" />
                 Fly To
               </button>
               <button
-                className={`${buttonBaseClassName} h-8 w-full px-2 text-[10px] font-semibold`}
+                className={`${buttonBaseClassName} h-8 w-full px-2 text-[10px] font-semibold gap-1.5`}
                 onClick={onSnapToGround}
                 disabled={isDisabled}
                 type="button"
+                title="Snap to ground"
               >
+                <FontAwesomeIcon icon={faArrowsDownToLine} className="text-[10px]" />
                 Snap
               </button>
               <button
@@ -385,11 +400,12 @@ export default function TransformPanel({
             </div>
           </div>
 
+          <div className={transformGroupContainerClassName}>
           {groups.map((group) => (
-            <div key={group.key} className={sectionCardClassName}>
+            <div key={group.key} className={transformGroupCardClassName}>
               <div className={sectionTitleClassName}>{group.label}</div>
               {group.key === "scale" ? (
-                <div className="mt-2 grid gap-2">
+                <div className={`mt-2 grid gap-2 ${embedded ? "min-h-0 flex-1" : ""}`}>
                   <label className="flex items-center gap-2">
                     <input
                       className="h-2 w-full accent-(--btn-active-bg)"
@@ -428,7 +444,7 @@ export default function TransformPanel({
                       inputMode="decimal"
                     />
                   </label>
-                  <div className="grid gap-1">
+                  <div className={embedded ? "layer-panel-scroll min-h-0 flex-1 overflow-y-auto pr-1 grid gap-1" : "grid gap-1"}>
                     {axisLabels.map((axis, axisIndex) => {
                       const fieldKey = `${group.key}-${axis}`;
                       return (
@@ -460,7 +476,9 @@ export default function TransformPanel({
                               disabled={isDisabled}
                               inputMode="decimal"
                             />
-                            {group.unit ? <span className={unitClassName}>{group.unit}</span> : null}
+                            {getAxisUnit(group.key, axisIndex, group.unit) ? (
+                              <span className={unitClassName}>{getAxisUnit(group.key, axisIndex, group.unit)}</span>
+                            ) : null}
                           </div>
                         </label>
                       );
@@ -468,7 +486,7 @@ export default function TransformPanel({
                   </div>
                 </div>
               ) : (
-                <div className="mt-2 grid gap-1">
+                <div className={embedded ? "layer-panel-scroll mt-2 min-h-0 flex-1 overflow-y-auto pr-1 grid gap-1" : "mt-2 grid gap-1"}>
                   {axisLabels.map((axis, axisIndex) => {
                     const fieldKey = `${group.key}-${axis}`;
                     return (
@@ -500,7 +518,9 @@ export default function TransformPanel({
                             disabled={isDisabled}
                             inputMode="decimal"
                           />
-                          {group.unit ? <span className={unitClassName}>{group.unit}</span> : null}
+                          {getAxisUnit(group.key, axisIndex, group.unit) ? (
+                            <span className={unitClassName}>{getAxisUnit(group.key, axisIndex, group.unit)}</span>
+                          ) : null}
                         </div>
                       </label>
                     );
@@ -509,6 +529,7 @@ export default function TransformPanel({
               )}
             </div>
           ))}
+          </div>
         </div>
       ) : null}
     </div>

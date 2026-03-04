@@ -14,7 +14,7 @@ import {
   faRightToBracket,
   faRightFromBracket,
   faUserShield,
-  faGear,
+  faTableColumns,
   faXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import type { ThemeMode } from "@/types/common";
@@ -135,12 +135,18 @@ export const EditorToolbar = ({
     "text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]";
   const buttonBaseClassName =
     "flex h-8 items-center justify-center rounded-md border border-[var(--btn-border)] bg-[var(--btn-bg)] text-[12px] text-[var(--text)] transition hover:border-[var(--btn-border-hover)] hover:bg-[var(--btn-hover)]";
-  const buttonIconClassName = "w-8";
+  const buttonIconMinimalClassName =
+    "flex h-8 w-8 items-center justify-center rounded-md border-0 bg-transparent text-[13px] text-[var(--text)] transition hover:bg-[var(--btn-hover)]";
+  const buttonIconClassName = "w-8 text-[13px]";
   const buttonWideClassName = "px-2.5";
   const buttonActiveClassName =
     "border-[var(--btn-active-border)] bg-[var(--btn-active-bg)] text-[var(--btn-active-text)]";
+  const buttonIconMinimalActiveClassName =
+    "bg-[var(--btn-active-bg)] text-[var(--btn-active-text)]";
   const themeToggleActiveClassName =
     "border-[var(--btn-active-border)] bg-[var(--btn-active-bg)] text-[var(--btn-active-text)]";
+  const themeToggleMinimalActiveClassName =
+    "bg-[var(--btn-active-bg)] text-[var(--btn-active-text)]";
   const modalOverlayClassName =
     "fixed inset-0 z-[2100] flex items-center justify-center bg-gradient-to-b from-black/50 via-black/40 to-black/60 backdrop-blur-md";
   const modalClassName =
@@ -157,11 +163,6 @@ export const EditorToolbar = ({
   const buttonPrimaryClassName =
     "border-[var(--btn-active-border)] bg-[var(--btn-active-bg)] text-[var(--btn-active-text)] shadow-[var(--btn-active-ring)]";
 
-  const weatherCycle: Record<WeatherOption, WeatherOption> = {
-    sun: "rain",
-    rain: "snow",
-    snow: "sun",
-  };
   const weatherLabel: Record<WeatherOption, string> = {
     sun: "Sun",
     rain: "Rain",
@@ -372,7 +373,6 @@ export const EditorToolbar = ({
         </div>
 
         <div className={groupClassName}>
-          <span className={labelClassName}>Map</span>
           {mapControlsRef ? (
             <div
               className={mapControlsClassName}
@@ -381,7 +381,7 @@ export const EditorToolbar = ({
             />
           ) : null}
           <button
-            className={`${buttonBaseClassName} ${buttonIconClassName}`}
+            className={buttonIconMinimalClassName}
             onClick={() => setFlyTo((prev) => ({ ...prev, open: true }))}
             type="button"
             title="Fly To"
@@ -392,9 +392,8 @@ export const EditorToolbar = ({
         </div>
 
         <div className={groupClassName}>
-          <span className={labelClassName}>View</span>
           <button
-            className={`${buttonBaseClassName} ${buttonIconClassName} ${showTiles ? buttonActiveClassName : ""}`}
+            className={`${buttonIconMinimalClassName} ${showTiles ? buttonIconMinimalActiveClassName : ""}`}
             onClick={onToggleTiles}
             title="Tile Boundaries"
             aria-label="Tile Boundaries"
@@ -402,8 +401,9 @@ export const EditorToolbar = ({
           >
             <FontAwesomeIcon icon={faBorderAll} />
           </button>
+          <span className="h-5 w-px bg-[var(--divider)]" aria-hidden="true" />
           <button
-            className={`${buttonBaseClassName} ${buttonIconClassName} ${showShadowTime ? buttonActiveClassName : ""}`}
+            className={`${buttonIconMinimalClassName} ${showShadowTime ? buttonIconMinimalActiveClassName : ""}`}
             onClick={onToggleShadowTime}
             title={showShadowTime ? "Hide shadow time" : "Show shadow time"}
             aria-label={
@@ -416,9 +416,8 @@ export const EditorToolbar = ({
         </div>
 
         <div className={groupClassName}>
-          <span className={labelClassName}>Theme</span>
           <button
-            className={`${buttonBaseClassName} ${buttonIconClassName} ${theme === "dark" ? themeToggleActiveClassName : ""}`}
+            className={`${buttonIconMinimalClassName} ${theme === "dark" ? themeToggleMinimalActiveClassName : ""}`}
             onClick={onToggleTheme}
             type="button"
             title={
@@ -469,32 +468,34 @@ export const EditorToolbar = ({
                     {weatherLabel[option]}
                   </button>
                 ))}
-                <div className="mt-1 rounded-md border border-[var(--divider)] bg-[var(--panel-bg)] px-2 py-2">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
-                    Rain Density
+                {weather === "rain" || weather === "snow" ? (
+                  <div className="mt-1 rounded-md border border-[var(--divider)] bg-[var(--panel-bg)] px-2 py-2">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                      Density
+                    </div>
+                    {weather === "rain" ? (
+                      <input
+                        className={weatherSliderClassName}
+                        type="range"
+                        min="0.2"
+                        max="3"
+                        step="0.1"
+                        value={rainDensity}
+                        onChange={(event) => onChangeRainDensity(Number(event.target.value))}
+                      />
+                    ) : (
+                      <input
+                        className={weatherSliderClassName}
+                        type="range"
+                        min="0.2"
+                        max="3"
+                        step="0.1"
+                        value={snowDensity}
+                        onChange={(event) => onChangeSnowDensity(Number(event.target.value))}
+                      />
+                    )}
                   </div>
-                  <input
-                    className={weatherSliderClassName}
-                    type="range"
-                    min="0.2"
-                    max="3"
-                    step="0.1"
-                    value={rainDensity}
-                    onChange={(event) => onChangeRainDensity(Number(event.target.value))}
-                  />
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
-                    Snow Density
-                  </div>
-                  <input
-                    className={weatherSliderClassName}
-                    type="range"
-                    min="0.2"
-                    max="3"
-                    step="0.1"
-                    value={snowDensity}
-                    onChange={(event) => onChangeSnowDensity(Number(event.target.value))}
-                  />
-                </div>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -539,13 +540,13 @@ export const EditorToolbar = ({
           <div className={groupClassName}>
             <span className={labelClassName}>Scene Panel</span>
             <button
-              className={`${buttonBaseClassName} ${buttonIconClassName}`}
+              className={`${buttonBaseClassName} ${buttonIconClassName} ${isSidePanelOpen ? buttonActiveClassName : ""}`}
               onClick={onToggleSidePanel}
               title={isSidePanelOpen ? "Close Scene Panel" : "Open Scene Panel"}
               aria-label={isSidePanelOpen ? "Close Scene Panel" : "Open Scene Panel"}
               type="button"
             >
-              <FontAwesomeIcon icon={faGear} />
+              <FontAwesomeIcon icon={faTableColumns} />
             </button>
           </div>
         ) : null}

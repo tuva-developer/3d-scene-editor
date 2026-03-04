@@ -15,6 +15,8 @@ import type { MapViewHandle } from "@/components/map/MapView";
 import type { LightGroupOption } from "@/components/map/data/models/objModel";
 import { DEFAULT_WATER_SETTINGS, type WaterSettings } from "@/components/map/water/WaterMaterial";
 
+const NO_ACTIVE_LAYER_ID = "__no_active_layer__";
+
 function App() {
   const styleUrl = (import.meta.env.VITE_STYLE_PATH as string | undefined)?.trim() ?? "";
   const { isEditor, user, login, logout } = useAuth();
@@ -36,6 +38,7 @@ function App() {
     }
     return window.localStorage.getItem("scene-editor-active-layer") || "models";
   });
+  const [baseLayerLocked, setBaseLayerLocked] = useState(true);
   const [layerModalOpen, setLayerModalOpen] = useState(false);
   const [layerModalInitialName, setLayerModalInitialName] = useState("Edit Layer 1");
   const [modelModalOpen, setModelModalOpen] = useState(false);
@@ -70,8 +73,10 @@ function App() {
   const [layerLightSettings, setLayerLightSettings] = useState<Record<string, LightIntensitySettings>>({});
   const [waterSettingsModalOpen, setWaterSettingsModalOpen] = useState(false);
   const [waterSettingsTargetId, setWaterSettingsTargetId] = useState<string | null>(null);
+  const [waterSettingsBaseline, setWaterSettingsBaseline] = useState<WaterSettings | null>(null);
   const [lightSettingsModalOpen, setLightSettingsModalOpen] = useState(false);
   const [lightSettingsTargetId, setLightSettingsTargetId] = useState<string | null>(null);
+  const [lightSettingsBaseline, setLightSettingsBaseline] = useState<LightIntensitySettings | null>(null);
   const instanceBlobUrlsRef = useRef<Map<string, string[]>>(new Map());
   const waterBlobUrlsRef = useRef<Map<string, string>>(new Map());
   const [theme, setTheme] = useState<ThemeMode>(() => {
@@ -82,7 +87,7 @@ function App() {
     return stored === "light" ? "light" : "dark";
   });
   const mapHandleRef = useRef<MapViewHandle>(null);
-  const mapCenter = useMemo(() => [106.6297, 10.8231] as [number, number], []);
+  const mapCenter = useMemo(() => [106.72135300000002, 10.796071] as [number, number], []);
   const editLayerCount = mapLayerOptions.filter((option) => option.id !== "models").length;
   const customLayerCount = customInstanceLayers.length;
   const customWaterCount = customWaterLayers.length;
@@ -125,24 +130,29 @@ function App() {
   };
   const lightIntensityRange = { min: 0.2, max: 3, step: 0.05 };
   const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+  const normalizeLightSettings = (settings: LightIntensitySettings): LightIntensitySettings => ({
+    directional: clamp(settings.directional, lightIntensityRange.min, lightIntensityRange.max),
+    hemisphere: clamp(settings.hemisphere, lightIntensityRange.min, lightIntensityRange.max),
+    ambient: clamp(settings.ambient, lightIntensityRange.min, lightIntensityRange.max),
+  });
+  const toLightOption = (settings: LightIntensitySettings): LightGroupOption => ({
+    directional: {
+      intensity: settings.directional,
+    },
+    hemisphere: {
+      intensity: settings.hemisphere,
+    },
+    ambient: {
+      intensity: settings.ambient,
+    },
+  });
+  const previewLightSettings = (layerId: string, settings: LightIntensitySettings) => {
+    const next = normalizeLightSettings(settings);
+    mapHandleRef.current?.setLayerLightOption(layerId, toLightOption(next));
+  };
   const applyLightSettings = (layerId: string, settings: LightIntensitySettings) => {
-    const next: LightIntensitySettings = {
-      directional: clamp(settings.directional, lightIntensityRange.min, lightIntensityRange.max),
-      hemisphere: clamp(settings.hemisphere, lightIntensityRange.min, lightIntensityRange.max),
-      ambient: clamp(settings.ambient, lightIntensityRange.min, lightIntensityRange.max),
-    };
-    const option: LightGroupOption = {
-      directional: {
-        intensity: next.directional,
-      },
-      hemisphere: {
-        intensity: next.hemisphere,
-      },
-      ambient: {
-        intensity: next.ambient,
-      },
-    };
-    mapHandleRef.current?.setLayerLightOption(layerId, option);
+    const next = normalizeLightSettings(settings);
+    mapHandleRef.current?.setLayerLightOption(layerId, toLightOption(next));
     setLayerLightSettings((prev) => ({ ...prev, [layerId]: next }));
   };
 
@@ -250,6 +260,9 @@ function App() {
   };
 
   useEffect(() => {
+    if (activeLayerId === NO_ACTIVE_LAYER_ID) {
+      return;
+    }
     const exists = layerOptions.some((option) => option.id === activeLayerId);
     if (!exists && layerOptions[0]) {
       setActiveLayerId(layerOptions[0].id);
@@ -335,7 +348,30 @@ function App() {
     setHasSelection(false);
     setHasChanges(false);
     setSelectionElevation(null);
+    setTransformValues(null);
   }, [activeLayerId]);
+
+  useEffect(() => {
+    if (!baseLayerLocked) {
+      return;
+    }
+    if (activeLayerId !== "models") {
+      return;
+    }
+    const fallbackLayerId =
+      layerOptions.find((option) => option.id !== "models")?.id ?? NO_ACTIVE_LAYER_ID;
+    setActiveLayerId(fallbackLayerId);
+  }, [activeLayerId, baseLayerLocked, layerOptions]);
+
+  useEffect(() => {
+    if (baseLayerLocked) {
+      return;
+    }
+    if (activeLayerId !== NO_ACTIVE_LAYER_ID) {
+      return;
+    }
+    setActiveLayerId("models");
+  }, [activeLayerId, baseLayerLocked]);
 
   useEffect(() => {
     if (!hasSelection) {
@@ -397,11 +433,15 @@ function App() {
   };
 
   const openWaterSettingsModal = (layerId: string) => {
+    const baseline = waterLayerSettings[layerId] ?? DEFAULT_WATER_SETTINGS;
+    setWaterSettingsBaseline(baseline);
     setWaterSettingsTargetId(layerId);
     setWaterSettingsModalOpen(true);
   };
 
   const openLightSettingsModal = (layerId: string) => {
+    const baseline = layerLightSettings[layerId] ?? defaultLightSettings;
+    setLightSettingsBaseline(baseline);
     setLightSettingsTargetId(layerId);
     setLightSettingsModalOpen(true);
   };
@@ -550,6 +590,33 @@ function App() {
     });
   };
 
+  const handleRenameLayer = (id: string, nextName: string) => {
+    const trimmed = nextName.trim();
+    if (!trimmed || id === "models") {
+      return;
+    }
+    const isCustom = customInstanceLayers.some((layer) => layer.id === id);
+    const isWater = customWaterLayers.some((layer) => layer.id === id);
+    if (isCustom) {
+      setCustomInstanceLayers((prev) =>
+        prev.map((layer) => (layer.id === id ? { ...layer, label: trimmed } : layer))
+      );
+      return;
+    }
+    if (isWater) {
+      setCustomWaterLayers((prev) =>
+        prev.map((layer) => (layer.id === id ? { ...layer, label: trimmed } : layer))
+      );
+      return;
+    }
+    const renamed = mapHandleRef.current?.renameLayer(id, trimmed) ?? false;
+    if (!renamed) {
+      setMapLayerOptions((prev) =>
+        prev.map((layer) => (layer.id === id ? { ...layer, label: trimmed } : layer))
+      );
+    }
+  };
+
   const handleJumpToModel = (model: LayerModelInfo) => {
     if (!model.coords) {
       return;
@@ -604,6 +671,13 @@ function App() {
         scale: next.scale ?? prev.scale,
       };
     });
+  };
+
+  const handleSelectLayer = (id: string) => {
+    if (id === "models" && baseLayerLocked) {
+      return;
+    }
+    setActiveLayerId(id);
   };
 
   return (
@@ -665,18 +739,31 @@ function App() {
             activeLayerId={activeLayerId}
             visibility={layerVisibility}
             modelsByLayer={layerModels}
-            onSelectLayer={setActiveLayerId}
+            onSelectLayer={handleSelectLayer}
             onToggleLayerVisibility={handleToggleLayerVisibility}
             onAddModel={handleAddModelToLayer}
             onCloneModel={handleCloneLayerModel}
             onDeleteModel={handleDeleteLayerModel}
             onDeleteLayer={handleDeleteLayer}
+            onRenameLayer={handleRenameLayer}
             onJumpToModel={handleJumpToModel}
             onShowAllLayers={handleShowAllLayers}
             onHideAllLayers={handleHideAllLayers}
             onAddLayer={openLayerModal}
             onAddInstanceLayer={openInstanceLayerModal}
             onAddWaterLayer={openWaterLayerModal}
+            baseLayerLocked={baseLayerLocked}
+            onToggleBaseLayerLock={(locked) => {
+              setBaseLayerLocked(locked);
+              if (locked && activeLayerId === "models") {
+                const fallbackLayerId =
+                  layerOptions.find((option) => option.id !== "models")?.id ?? NO_ACTIVE_LAYER_ID;
+                setActiveLayerId(fallbackLayerId);
+              }
+              if (!locked && activeLayerId === NO_ACTIVE_LAYER_ID) {
+                setActiveLayerId("models");
+              }
+            }}
             onEditWaterLayer={openWaterSettingsModal}
             onEditLayerLight={openLightSettingsModal}
             transformValues={transformValues}
@@ -861,9 +948,19 @@ function App() {
             initialSettings={
               (waterSettingsTargetId && waterLayerSettings[waterSettingsTargetId]) || DEFAULT_WATER_SETTINGS
             }
+            onChange={(settings) => {
+              if (!waterSettingsTargetId) {
+                return;
+              }
+              mapHandleRef.current?.setWaterLayerSettings(waterSettingsTargetId, settings);
+            }}
             onCancel={() => {
+              if (waterSettingsTargetId && waterSettingsBaseline) {
+                mapHandleRef.current?.setWaterLayerSettings(waterSettingsTargetId, waterSettingsBaseline);
+              }
               setWaterSettingsModalOpen(false);
               setWaterSettingsTargetId(null);
+              setWaterSettingsBaseline(null);
             }}
             onConfirm={(settings) => {
               if (!waterSettingsTargetId) {
@@ -874,6 +971,7 @@ function App() {
               mapHandleRef.current?.setWaterLayerSettings(waterSettingsTargetId, settings);
               setWaterSettingsModalOpen(false);
               setWaterSettingsTargetId(null);
+              setWaterSettingsBaseline(null);
             }}
           />
           <LightSettingsModal
@@ -890,9 +988,19 @@ function App() {
             min={lightIntensityRange.min}
             max={lightIntensityRange.max}
             step={lightIntensityRange.step}
+            onChange={(settings) => {
+              if (!lightSettingsTargetId) {
+                return;
+              }
+              previewLightSettings(lightSettingsTargetId, settings);
+            }}
             onCancel={() => {
+              if (lightSettingsTargetId && lightSettingsBaseline) {
+                previewLightSettings(lightSettingsTargetId, lightSettingsBaseline);
+              }
               setLightSettingsModalOpen(false);
               setLightSettingsTargetId(null);
+              setLightSettingsBaseline(null);
             }}
             onConfirm={(settings) => {
               if (!lightSettingsTargetId) {
@@ -902,6 +1010,7 @@ function App() {
               applyLightSettings(lightSettingsTargetId, settings);
               setLightSettingsModalOpen(false);
               setLightSettingsTargetId(null);
+              setLightSettingsBaseline(null);
             }}
           />
         </>

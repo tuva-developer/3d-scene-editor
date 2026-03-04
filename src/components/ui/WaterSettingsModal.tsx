@@ -1,10 +1,11 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { DEFAULT_WATER_SETTINGS, type WaterSettings } from "@/components/map/water/WaterMaterial";
 
 type WaterSettingsModalProps = {
   open: boolean;
   layerName: string;
   initialSettings: WaterSettings;
+  onChange: (settings: WaterSettings) => void;
   onConfirm: (settings: WaterSettings) => void;
   onCancel: () => void;
 };
@@ -42,10 +43,19 @@ export default function WaterSettingsModal({
   open,
   layerName,
   initialSettings,
+  onChange,
   onConfirm,
   onCancel,
 }: WaterSettingsModalProps) {
   const [settings, setSettings] = useState<WaterSettings>(initialSettings);
+  const [modalOffset, setModalOffset] = useState({ x: 0, y: 0 });
+  const dragStateRef = useRef({
+    active: false,
+    startX: 0,
+    startY: 0,
+    offsetX: 0,
+    offsetY: 0,
+  });
   const titleId = useId();
   const descriptionId = useId();
 
@@ -54,6 +64,7 @@ export default function WaterSettingsModal({
       return;
     }
     setSettings(initialSettings);
+    setModalOffset({ x: 0, y: 0 });
   }, [initialSettings, open]);
 
   useEffect(() => {
@@ -74,14 +85,52 @@ export default function WaterSettingsModal({
     return null;
   }
 
+  const handleDragStart = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0) {
+      return;
+    }
+    dragStateRef.current = {
+      active: true,
+      startX: event.clientX,
+      startY: event.clientY,
+      offsetX: modalOffset.x,
+      offsetY: modalOffset.y,
+    };
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!dragStateRef.current.active) {
+        return;
+      }
+      const deltaX = moveEvent.clientX - dragStateRef.current.startX;
+      const deltaY = moveEvent.clientY - dragStateRef.current.startY;
+      setModalOffset({
+        x: dragStateRef.current.offsetX + deltaX,
+        y: dragStateRef.current.offsetY + deltaY,
+      });
+    };
+
+    const handleMouseUp = () => {
+      dragStateRef.current.active = false;
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  };
+
   const updateNumber = (key: keyof WaterSettings, value: number, min: number, max: number) => {
-    setSettings((prev) => ({ ...prev, [key]: clamp(value, min, max) }));
+    setSettings((prev) => {
+      const next = { ...prev, [key]: clamp(value, min, max) };
+      onChange(next);
+      return next;
+    });
   };
 
   return (
-    <div className="fixed inset-0 z-4000 flex items-center justify-center">
+    <div className="fixed inset-0 z-4000">
       <div
-        className="absolute inset-0 bg-black/45 backdrop-blur-[1px]"
+        className="absolute inset-0 bg-transparent"
         onClick={onCancel}
         aria-hidden="true"
       />
@@ -90,12 +139,18 @@ export default function WaterSettingsModal({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
-        className="relative z-1 w-[min(92vw,520px)] rounded-xl border border-(--panel-border) bg-(--panel-bg) p-4 text-(--text) shadow-(--panel-shadow)"
+        className="absolute left-1/2 top-1/2 z-1 w-[min(92vw,520px)] rounded-xl border border-(--panel-border) bg-(--panel-bg) p-4 text-(--text) shadow-(--panel-shadow)"
+        style={{
+          transform: `translate(calc(-50% + ${modalOffset.x}px), calc(-50% + ${modalOffset.y}px))`,
+        }}
+        onClick={(event) => event.stopPropagation()}
       >
-        <div id={titleId} className="text-[15px] font-semibold">
-          Edit Water Settings
+        <div className="mb-1 cursor-move select-none" onMouseDown={handleDragStart} title="Drag to move">
+          <div id={titleId} className="text-[15px] font-semibold">
+            Edit Water Settings
+          </div>
         </div>
-        <div id={descriptionId} className="mt-1 text-[12px] text-(--text-muted)">
+        <div id={descriptionId} className="text-[12px] text-(--text-muted)">
           Customize material for {layerName}.
         </div>
 
@@ -107,7 +162,11 @@ export default function WaterSettingsModal({
                 type="color"
                 value={settings[field.key] as string}
                 onChange={(event) =>
-                  setSettings((prev) => ({ ...prev, [field.key]: event.target.value }))
+                  setSettings((prev) => {
+                    const next = { ...prev, [field.key]: event.target.value };
+                    onChange(next);
+                    return next;
+                  })
                 }
                 className="h-9 w-16 cursor-pointer rounded-md border border-(--btn-border) bg-(--btn-bg) p-1"
               />
@@ -150,7 +209,11 @@ export default function WaterSettingsModal({
         <div className="mt-4 flex items-center justify-between gap-2">
           <button
             type="button"
-            onClick={() => setSettings({ ...DEFAULT_WATER_SETTINGS })}
+            onClick={() => {
+              const next = { ...DEFAULT_WATER_SETTINGS };
+              setSettings(next);
+              onChange(next);
+            }}
             className="h-9 rounded-md border border-(--btn-border) bg-(--btn-bg) px-3 text-[13px] font-semibold text-(--text) transition hover:border-(--btn-border-hover) hover:bg-(--btn-hover)"
           >
             Reset Defaults

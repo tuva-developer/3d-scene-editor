@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 
 export type LightIntensitySettings = {
   directional: number;
@@ -14,6 +14,7 @@ type LightSettingsModalProps = {
   min?: number;
   max?: number;
   step?: number;
+  onChange: (settings: LightIntensitySettings) => void;
   onConfirm: (settings: LightIntensitySettings) => void;
   onCancel: () => void;
 };
@@ -28,10 +29,19 @@ export default function LightSettingsModal({
   min = 0.2,
   max = 3,
   step = 0.05,
+  onChange,
   onConfirm,
   onCancel,
 }: LightSettingsModalProps) {
   const [settings, setSettings] = useState<LightIntensitySettings>(initialSettings);
+  const [modalOffset, setModalOffset] = useState({ x: 0, y: 0 });
+  const dragStateRef = useRef({
+    active: false,
+    startX: 0,
+    startY: 0,
+    offsetX: 0,
+    offsetY: 0,
+  });
   const titleId = useId();
   const descriptionId = useId();
 
@@ -40,6 +50,7 @@ export default function LightSettingsModal({
       return;
     }
     setSettings(initialSettings);
+    setModalOffset({ x: 0, y: 0 });
   }, [initialSettings, open]);
 
   useEffect(() => {
@@ -60,11 +71,49 @@ export default function LightSettingsModal({
     return null;
   }
 
+  const handleDragStart = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0) {
+      return;
+    }
+    dragStateRef.current = {
+      active: true,
+      startX: event.clientX,
+      startY: event.clientY,
+      offsetX: modalOffset.x,
+      offsetY: modalOffset.y,
+    };
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!dragStateRef.current.active) {
+        return;
+      }
+      const deltaX = moveEvent.clientX - dragStateRef.current.startX;
+      const deltaY = moveEvent.clientY - dragStateRef.current.startY;
+      setModalOffset({
+        x: dragStateRef.current.offsetX + deltaX,
+        y: dragStateRef.current.offsetY + deltaY,
+      });
+    };
+
+    const handleMouseUp = () => {
+      dragStateRef.current.active = false;
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  };
+
   const updateIntensity = (key: keyof LightIntensitySettings, value: number) => {
-    setSettings((prev) => ({
-      ...prev,
-      [key]: clamp(value, min, max),
-    }));
+    setSettings((prev) => {
+      const next = {
+        ...prev,
+        [key]: clamp(value, min, max),
+      };
+      onChange(next);
+      return next;
+    });
   };
 
   const controls: Array<{ key: keyof LightIntensitySettings; label: string }> = [
@@ -74,9 +123,9 @@ export default function LightSettingsModal({
   ];
 
   return (
-    <div className="fixed inset-0 z-4000 flex items-center justify-center">
+    <div className="fixed inset-0 z-4000">
       <div
-        className="absolute inset-0 bg-black/45 backdrop-blur-[1px]"
+        className="absolute inset-0 bg-transparent"
         onClick={onCancel}
         aria-hidden="true"
       />
@@ -85,12 +134,22 @@ export default function LightSettingsModal({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
-        className="relative z-1 w-[min(92vw,420px)] rounded-xl border border-(--panel-border) bg-(--panel-bg) p-4 text-(--text) shadow-(--panel-shadow)"
+        className="absolute left-1/2 top-1/2 z-1 w-[min(92vw,420px)] rounded-xl border border-(--panel-border) bg-(--panel-bg) p-4 text-(--text) shadow-(--panel-shadow)"
+        style={{
+          transform: `translate(calc(-50% + ${modalOffset.x}px), calc(-50% + ${modalOffset.y}px))`,
+        }}
+        onClick={(event) => event.stopPropagation()}
       >
-        <div id={titleId} className="text-[15px] font-semibold">
-          Light Settings
+        <div
+          className="mb-1 cursor-move select-none"
+          onMouseDown={handleDragStart}
+          title="Drag to move"
+        >
+          <div id={titleId} className="text-[15px] font-semibold">
+            Light Settings
+          </div>
         </div>
-        <div id={descriptionId} className="mt-1 text-[12px] text-(--text-muted)">
+        <div id={descriptionId} className="text-[12px] text-(--text-muted)">
           Adjust light intensity for {layerName}.
         </div>
 
@@ -126,7 +185,10 @@ export default function LightSettingsModal({
         <div className="mt-4 flex items-center justify-between gap-2">
           <button
             type="button"
-            onClick={() => setSettings(defaultSettings)}
+            onClick={() => {
+              setSettings(defaultSettings);
+              onChange(defaultSettings);
+            }}
             className="h-9 rounded-md border border-(--btn-border) bg-(--btn-bg) px-3 text-[13px] font-semibold text-(--text) transition hover:border-(--btn-border-hover) hover:bg-(--btn-hover)"
           >
             Reset Default

@@ -12,16 +12,13 @@ export default function LoginModal({ open, onLogin, onCancel }: Props) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
 
   if (!open) return null;
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
-    setLoading(true);
     const ok = onLogin(username, password);
-    setLoading(false);
     if (!ok) {
       setError("Invalid username or password.");
     } else {
@@ -120,9 +117,8 @@ export default function LoginModal({ open, onLogin, onCancel }: Props) {
             <button
               type="submit"
               className={`${buttonBaseClassName} ${buttonPrimaryClassName}`}
-              disabled={loading}
             >
-              {loading ? "Signing in..." : "Sign in"}
+              Sign in
             </button>
           </div>
         </form>
