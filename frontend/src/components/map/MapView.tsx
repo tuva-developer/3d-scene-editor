@@ -4,7 +4,7 @@ import type { WebGLContextAttributesWithType } from "maplibre-gl";
 import { ModelLayer } from "@/components/map/layers/ModelLayer";
 import { OverlayLayer } from "@/components/map/layers/OverlayLayer";
 import OutlineLayer from "@/components/map/layers/OutlineLayer";
-import { EditLayer } from "@/components/map/layers/EditLayer";
+import { EditLayer, type EditLayerObjectSnapshot } from "@/components/map/layers/EditLayer";
 import type { LayerOption, TransformMode, TransformValues } from "@/types/common";
 import { decomposeObject, loadModelFromGlb, type LightGroupOption } from "@/components/map/data/models/objModel";
 import { getSunPosition, getSunPositionAt } from "@/components/map/shadow/ShadowHelper";
@@ -43,10 +43,25 @@ export interface MapViewHandle {
   snapObjectSelectedToGround(): void;
   enableClippingPlanesObjectSelected(enable: boolean): void;
   enableFootPrintWhenEdit(enable: boolean): void;
-  addEditLayer(options?: { name?: string; modelUrl?: string; coords?: { lat: number; lng: number } }): string | null;
+  addEditLayer(options?: { name?: string; modelUrl?: string; coords?: { lat: number; lng: number }; layerId?: string }): string | null;
   addModelToLayer(
     layerId: string,
-    options?: { modelUrl?: string; coords?: { lat: number; lng: number }; instanceId?: string; name?: string }
+    options?: {
+      modelUrl?: string;
+      coords?: { lat: number; lng: number };
+      instanceId?: string;
+      name?: string;
+      initialState?: {
+        tile: { z: number; x: number; y: number };
+        scaleUnit: number;
+        transform: {
+          position: [number, number, number];
+          rotation: [number, number, number];
+          scale: [number, number, number];
+        };
+        coords?: { lat: number; lng: number } | null;
+      };
+    }
   ): boolean;
   removeModelFromLayer(layerId: string, instanceId: string): boolean;
   cloneModelInLayer(layerId: string, instanceId: string, newInstanceId: string): boolean;
@@ -60,6 +75,9 @@ export interface MapViewHandle {
   renameLayer(id: string, name: string): boolean;
   removeLayer(id: string): void;
   setSunTime(date: Date): void;
+  getViewState(): { center: [number, number]; zoom: number; bearing: number; pitch: number } | null;
+  setViewState(state: { center?: [number, number]; zoom?: number; bearing?: number; pitch?: number }): void;
+  getEditLayerSnapshots(): Array<{ id: string; name: string; models: EditLayerObjectSnapshot[] }>;
   addInstanceLayer(options: {
     tileUrl: string;
     sourceLayer: string;
@@ -1010,7 +1028,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
         if (!mainMap || !overlayLayer || !outlineLayer) {
           return null;
         }
-        const id = generateId();
+        const id = options?.layerId?.trim() || generateId();
         const layerName = options?.name?.trim() ? options.name.trim() : `Edit Layer ${id.slice(0, 6)}`;
         const centerPoint = mainMap.getCenter();
         const lat = options?.coords?.lat ?? centerPoint.lat;
@@ -1109,6 +1127,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
             entry.layer.addObjectToScene(glbPath, 1, options?.coords, {
               instanceId: options?.instanceId,
               name: options?.name,
+              initialState: options?.initialState,
             });
             if (isBlobUrl) {
               URL.revokeObjectURL(glbPath);
@@ -1158,6 +1177,39 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
           entry.layer.setSunPos(sunPos.altitude, sunPos.azimuth);
         });
         mainMap.triggerRepaint();
+      },
+      getViewState() {
+        const mainMap = map.current;
+        if (!mainMap) {
+          return null;
+        }
+        const centerPoint = mainMap.getCenter();
+        return {
+          center: [centerPoint.lng, centerPoint.lat],
+          zoom: mainMap.getZoom(),
+          bearing: mainMap.getBearing(),
+          pitch: mainMap.getPitch(),
+        };
+      },
+      setViewState(state) {
+        const mainMap = map.current;
+        if (!mainMap) {
+          return;
+        }
+        const currentCenter = mainMap.getCenter();
+        mainMap.jumpTo({
+          center: state.center ?? [currentCenter.lng, currentCenter.lat],
+          zoom: typeof state.zoom === "number" ? state.zoom : mainMap.getZoom(),
+          bearing: typeof state.bearing === "number" ? state.bearing : mainMap.getBearing(),
+          pitch: typeof state.pitch === "number" ? state.pitch : mainMap.getPitch(),
+        });
+      },
+      getEditLayerSnapshots() {
+        return editLayersRef.current.map((entry) => ({
+          id: entry.layer.id,
+          name: entry.name,
+          models: entry.layer.getObjectSnapshots(),
+        }));
       },
       addInstanceLayer(options) {
         const mainMap = map.current;

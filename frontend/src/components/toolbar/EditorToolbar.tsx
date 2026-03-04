@@ -15,6 +15,8 @@ import {
   faRightFromBracket,
   faUserShield,
   faTableColumns,
+  faFloppyDisk,
+  faFolderOpen,
   faXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import type { ThemeMode } from "@/types/common";
@@ -71,6 +73,8 @@ interface Props {
   onLogout?: () => void;
   isSidePanelOpen?: boolean;
   onToggleSidePanel?: () => void;
+  onExportScene?: () => void;
+  onImportScene?: () => void;
 }
 
 function clampTextValue(value: string): string {
@@ -101,6 +105,8 @@ export const EditorToolbar = ({
   onLogout,
   isSidePanelOpen = true,
   onToggleSidePanel,
+  onExportScene,
+  onImportScene,
 }: Props) => {
   const [weatherMenuOpen, setWeatherMenuOpen] = useState(false);
   const weatherMenuRef = useRef<HTMLDivElement | null>(null);
@@ -548,6 +554,34 @@ export const EditorToolbar = ({
             >
               <FontAwesomeIcon icon={faTableColumns} />
             </button>
+          </div>
+        ) : null}
+
+        {isEditor && (onExportScene || onImportScene) ? (
+          <div className={groupClassName}>
+            <span className={labelClassName}>Scene</span>
+            {onImportScene ? (
+              <button
+                className={`${buttonBaseClassName} ${buttonIconClassName}`}
+                onClick={onImportScene}
+                title="Import Scene"
+                aria-label="Import Scene"
+                type="button"
+              >
+                <FontAwesomeIcon icon={faFolderOpen} />
+              </button>
+            ) : null}
+            {onExportScene ? (
+              <button
+                className={`${buttonBaseClassName} ${buttonIconClassName}`}
+                onClick={onExportScene}
+                title="Export Scene JSON"
+                aria-label="Export Scene JSON"
+                type="button"
+              >
+                <FontAwesomeIcon icon={faFloppyDisk} />
+              </button>
+            ) : null}
           </div>
         ) : null}
 

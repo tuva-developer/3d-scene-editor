@@ -1,9 +1,26 @@
 node_modules
-/dist
-/dist-ssr
+.vite
 *.log
 .DS_Store
-.env
-.env.*
-!.env.example
-.vite
+
+# frontend
+frontend/node_modules
+frontend/dist
+frontend/.vite
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# backend
+backend/node_modules
+backend/dist
+backend/uploads
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# prisma/sqlite local files (if used)
+backend/prisma/*.db
+backend/prisma/*.db-journal
+
+*.tsbuildinfo

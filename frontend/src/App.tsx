@@ -17,6 +17,46 @@ import { DEFAULT_WATER_SETTINGS, type WaterSettings } from "@/components/map/wat
 
 const NO_ACTIVE_LAYER_ID = "__no_active_layer__";
 
+type SceneFileV2 = {
+  version: 2;
+  exportedAt: string;
+  payload: {
+    viewState: { center: [number, number]; zoom: number; bearing: number; pitch: number } | null;
+    weather: "sun" | "rain" | "snow";
+    daylight: "morning" | "noon" | "evening" | "night";
+    rainDensity: number;
+    snowDensity: number;
+    sunMinutes: number;
+    showShadowTime: boolean;
+    baseLayerLocked: boolean;
+    activeLayerId: string;
+    layerVisibility: Record<string, boolean>;
+    layerLightSettings: Record<string, LightIntensitySettings>;
+    waterLayerSettings: Record<string, WaterSettings>;
+    customInstanceLayers: LayerOption[];
+    customWaterLayers: LayerOption[];
+    instanceLayerConfigs: Record<string, { tileUrl: string; sourceLayer: string; modelUrls: string[] }>;
+    waterLayerConfigs: Record<string, { tileUrl: string; sourceLayer: string; normalTextureUrl?: string }>;
+    editLayers: Array<{
+      id: string;
+      name: string;
+      models: Array<{
+        instanceId: string;
+        name: string;
+        modelUrl: string;
+        coords: { lat: number; lng: number } | null;
+        tile: { z: number; x: number; y: number };
+        scaleUnit: number;
+        transform: {
+          position: [number, number, number];
+          rotation: [number, number, number];
+          scale: [number, number, number];
+        };
+      }>;
+    }>;
+  };
+};
+
 function App() {
   const styleUrl = (import.meta.env.VITE_STYLE_PATH as string | undefined)?.trim() ?? "";
   const { isEditor, user, login, logout } = useAuth();
@@ -65,10 +105,16 @@ function App() {
   const [instanceModelFiles, setInstanceModelFiles] = useState<File[]>([]);
   const [instanceLayerName, setInstanceLayerName] = useState("Custom Layer 1");
   const [customInstanceLayers, setCustomInstanceLayers] = useState<LayerOption[]>([]);
+  const [instanceLayerConfigs, setInstanceLayerConfigs] = useState<
+    Record<string, { tileUrl: string; sourceLayer: string; modelUrls: string[] }>
+  >({});
   const [waterLayerModalOpen, setWaterLayerModalOpen] = useState(false);
   const [waterLayerName, setWaterLayerName] = useState("Water Layer 1");
   const [waterTextureFile, setWaterTextureFile] = useState<File | null>(null);
   const [customWaterLayers, setCustomWaterLayers] = useState<LayerOption[]>([]);
+  const [waterLayerConfigs, setWaterLayerConfigs] = useState<
+    Record<string, { tileUrl: string; sourceLayer: string; normalTextureUrl?: string }>
+  >({});
   const [waterLayerSettings, setWaterLayerSettings] = useState<Record<string, WaterSettings>>({});
   const [layerLightSettings, setLayerLightSettings] = useState<Record<string, LightIntensitySettings>>({});
   const [waterSettingsModalOpen, setWaterSettingsModalOpen] = useState(false);
@@ -79,6 +125,7 @@ function App() {
   const [lightSettingsBaseline, setLightSettingsBaseline] = useState<LightIntensitySettings | null>(null);
   const instanceBlobUrlsRef = useRef<Map<string, string[]>>(new Map());
   const waterBlobUrlsRef = useRef<Map<string, string>>(new Map());
+  const importSceneInputRef = useRef<HTMLInputElement>(null);
   const [theme, setTheme] = useState<ThemeMode>(() => {
     if (typeof window === "undefined") {
       return "dark";
@@ -258,6 +305,14 @@ function App() {
       coords,
     };
   };
+
+  const readFileAsDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+      reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
+      reader.readAsDataURL(file);
+    });
 
   useEffect(() => {
     if (activeLayerId === NO_ACTIVE_LAYER_ID) {
@@ -468,13 +523,13 @@ function App() {
     setActiveLayerId(layerId);
   };
 
-  const handleConfirmAddModel = (
+  const handleConfirmAddModel = async (
     layerId: string,
     _name: string,
     file: File | null,
     coords: { lat: number; lng: number } | null
   ) => {
-    const modelUrl = file ? URL.createObjectURL(file) : undefined;
+    const modelUrl = file ? await readFileAsDataUrl(file) : undefined;
     const fallbackCenter = mapHandleRef.current?.getCenter() ?? { lat: mapCenter[1], lng: mapCenter[0] };
     const targetCoords = coords ?? fallbackCenter;
     const modelInfo = createModelInfo(file, modelUrl, targetCoords);
@@ -549,6 +604,12 @@ function App() {
     if (isCustom) {
       revokeInstanceBlobUrls(id);
       setCustomInstanceLayers((prev) => prev.filter((layer) => layer.id !== id));
+      setInstanceLayerConfigs((prev) => {
+        if (!(id in prev)) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
       setLayerVisibility((prev) => {
         if (!(id in prev)) {
           return prev;
@@ -562,6 +623,12 @@ function App() {
     if (isWater) {
       revokeWaterBlobUrls(id);
       setCustomWaterLayers((prev) => prev.filter((layer) => layer.id !== id));
+      setWaterLayerConfigs((prev) => {
+        if (!(id in prev)) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
       setLayerVisibility((prev) => {
         if (!(id in prev)) {
           return prev;
@@ -678,6 +745,208 @@ function App() {
       return;
     }
     setActiveLayerId(id);
+  };
+
+  const restoreSceneFromFile = (scene: SceneFileV2) => {
+    const saved = scene.payload;
+    const mapHandle = mapHandleRef.current;
+    if (!mapHandle) {
+      window.alert("Map is not ready yet.");
+      return;
+    }
+
+    const removableIds = layerOptions.filter((layer) => layer.id !== "models").map((layer) => layer.id);
+    removableIds.forEach((id) => mapHandle.removeLayer(id));
+    revokeInstanceBlobUrls();
+    revokeWaterBlobUrls();
+    setLayerModels({});
+    setCustomInstanceLayers([]);
+    setCustomWaterLayers([]);
+    setInstanceLayerConfigs({});
+    setWaterLayerConfigs({});
+    setWaterLayerSettings({});
+    setLayerLightSettings({});
+    setLayerVisibility({ models: true });
+
+    const nextLayerModels: Record<string, LayerModelInfo[]> = {};
+    (saved.editLayers ?? []).forEach((layer) => {
+      const createdId = mapHandle.addEditLayer({ layerId: layer.id, name: layer.name }) ?? null;
+      if (!createdId) {
+        return;
+      }
+      nextLayerModels[layer.id] = [];
+      (layer.models ?? []).forEach((model) => {
+        mapHandle.addModelToLayer(layer.id, {
+          modelUrl: model.modelUrl,
+          instanceId: model.instanceId,
+          name: model.name,
+          coords: model.coords ?? undefined,
+          initialState: {
+            tile: model.tile,
+            scaleUnit: model.scaleUnit,
+            transform: model.transform,
+            coords: model.coords,
+          },
+        });
+        nextLayerModels[layer.id].push({
+          id: model.instanceId,
+          name: model.name,
+          coords: model.coords,
+        });
+      });
+    });
+    setLayerModels(nextLayerModels);
+
+    const restoredInstanceLayers: LayerOption[] = [];
+    (saved.customInstanceLayers ?? []).forEach((layer) => {
+      const config = saved.instanceLayerConfigs?.[layer.id];
+      if (!config) {
+        return;
+      }
+      const modelUrls = (config.modelUrls ?? []).filter((url) => typeof url === "string" && url.trim().length > 0);
+      if (modelUrls.length === 0) {
+        return;
+      }
+      const createdId = mapHandle.addInstanceLayer({
+        layerId: layer.id,
+        tileUrl: config.tileUrl,
+        sourceLayer: config.sourceLayer,
+        modelUrls,
+      });
+      if (createdId) {
+        restoredInstanceLayers.push(layer);
+      }
+    });
+    setCustomInstanceLayers(restoredInstanceLayers);
+    setInstanceLayerConfigs(saved.instanceLayerConfigs ?? {});
+
+    const restoredWaterLayers: LayerOption[] = [];
+    (saved.customWaterLayers ?? []).forEach((layer) => {
+      const config = saved.waterLayerConfigs?.[layer.id];
+      if (!config) {
+        return;
+      }
+      const settings = saved.waterLayerSettings?.[layer.id] ?? DEFAULT_WATER_SETTINGS;
+      const createdId = mapHandle.addWaterLayer({
+        layerId: layer.id,
+        tileUrl: config.tileUrl,
+        sourceLayer: config.sourceLayer,
+        normalTextureUrl: config.normalTextureUrl,
+        settings,
+      });
+      if (createdId) {
+        restoredWaterLayers.push(layer);
+      }
+    });
+    setCustomWaterLayers(restoredWaterLayers);
+    setWaterLayerConfigs(saved.waterLayerConfigs ?? {});
+    setWaterLayerSettings(saved.waterLayerSettings ?? {});
+    setLayerLightSettings(saved.layerLightSettings ?? {});
+
+    const visibilityNext = { models: true, ...(saved.layerVisibility ?? {}) };
+    setLayerVisibility(visibilityNext);
+    Object.entries(visibilityNext).forEach(([id, visible]) => {
+      mapHandle.setLayerVisibility(id, Boolean(visible));
+    });
+
+    Object.entries(saved.layerLightSettings ?? {}).forEach(([id, settings]) => {
+      mapHandle.setLayerLightOption(id, toLightOption(settings));
+    });
+    Object.entries(saved.waterLayerSettings ?? {}).forEach(([id, settings]) => {
+      mapHandle.setWaterLayerSettings(id, settings);
+    });
+
+    setWeather(saved.weather ?? "sun");
+    setDaylight(saved.daylight ?? "noon");
+    setRainDensity(saved.rainDensity ?? 1.4);
+    setSnowDensity(saved.snowDensity ?? 1.3);
+    setShowShadowTime(saved.showShadowTime ?? true);
+    setBaseLayerLocked(saved.baseLayerLocked ?? true);
+
+    const nextMinutes = saved.sunMinutes ?? (new Date().getHours() * 60 + new Date().getMinutes());
+    setSunMinutes(nextMinutes);
+    const sunTime = new Date(sunDate);
+    sunTime.setHours(Math.floor(nextMinutes / 60), nextMinutes % 60, 0, 0);
+    mapHandle.setSunTime(sunTime);
+
+    if (saved.viewState) {
+      mapHandle.setViewState(saved.viewState);
+    }
+
+    setActiveLayerId(saved.activeLayerId || "models");
+  };
+
+  const handleExportSceneJson = () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const mapHandle = mapHandleRef.current;
+    if (!mapHandle) {
+      window.alert("Map is not ready yet.");
+      return;
+    }
+    const payload: SceneFileV2 = {
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      payload: {
+        viewState: mapHandle.getViewState(),
+        weather,
+        daylight,
+        rainDensity,
+        snowDensity,
+        sunMinutes,
+        showShadowTime,
+        baseLayerLocked,
+        activeLayerId,
+        layerVisibility,
+        layerLightSettings,
+        waterLayerSettings,
+        customInstanceLayers,
+        customWaterLayers,
+        instanceLayerConfigs,
+        waterLayerConfigs,
+        editLayers: mapHandle.getEditLayerSnapshots(),
+      },
+    };
+    const text = JSON.stringify(payload, null, 2);
+    const blob = new Blob([text], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const defaultName = `scene-editor-v2-${stamp}.json`;
+    const enteredName = window.prompt("Enter export file name", defaultName);
+    if (enteredName === null) {
+      URL.revokeObjectURL(url);
+      return;
+    }
+    const trimmedName = enteredName.trim();
+    const safeBaseName = trimmedName.length > 0 ? trimmedName : defaultName;
+    const finalName = safeBaseName.toLowerCase().endsWith(".json") ? safeBaseName : `${safeBaseName}.json`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = finalName;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportSceneFile = async (file: File) => {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(await file.text());
+    } catch {
+      window.alert("Invalid JSON file.");
+      return;
+    }
+    const scene = parsed as SceneFileV2;
+    if (!scene || scene.version !== 2 || !scene.payload) {
+      window.alert("Unsupported scene file version.");
+      return;
+    }
+    restoreSceneFromFile(scene);
+    window.alert("Scene imported successfully.");
+  };
+
+  const handleOpenImportScene = () => {
+    importSceneInputRef.current?.click();
   };
 
   return (
@@ -829,6 +1098,24 @@ function App() {
                 })
             : undefined
         }
+        onExportScene={isEditor ? handleExportSceneJson : undefined}
+        onImportScene={isEditor ? handleOpenImportScene : undefined}
+      />
+      <input
+        ref={importSceneInputRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={(event) => {
+          const inputEl = event.currentTarget;
+          const file = event.target.files?.[0];
+          if (!file) {
+            return;
+          }
+          handleImportSceneFile(file).finally(() => {
+            inputEl.value = "";
+          });
+        }}
       />
       {isEditor ? (
         <>
@@ -873,11 +1160,15 @@ function App() {
             onCancel={() => setInstanceLayerModalOpen(false)}
             nameValue={instanceLayerName}
             onChangeName={setInstanceLayerName}
-            onConfirm={(data) => {
+            onConfirm={async (data) => {
               const fileUrls =
                 data.modelFiles.length > 0
                   ? data.modelFiles.map((file) => URL.createObjectURL(file))
                   : [];
+              const persistedModelUrls =
+                data.modelFiles.length > 0
+                  ? (await Promise.all(data.modelFiles.map((file) => readFileAsDataUrl(file)))).filter((url) => !!url)
+                  : data.modelUrls;
               const layerId =
                 mapHandleRef.current?.addInstanceLayer({
                   tileUrl: data.tileUrl,
@@ -891,6 +1182,14 @@ function App() {
               if (fileUrls.length > 0) {
                 instanceBlobUrlsRef.current.set(layerId, fileUrls);
               }
+              setInstanceLayerConfigs((prev) => ({
+                ...prev,
+                [layerId]: {
+                  tileUrl: data.tileUrl,
+                  sourceLayer: data.sourceLayer,
+                  modelUrls: persistedModelUrls,
+                },
+              }));
               const label = data.name.trim() || instanceLayerName.trim() || `Custom Layer ${customLayerCount + 1}`;
               setCustomInstanceLayers((prev) => [
                 ...prev,
@@ -928,6 +1227,14 @@ function App() {
               if (textureUrl) {
                 waterBlobUrlsRef.current.set(layerId, textureUrl);
               }
+              setWaterLayerConfigs((prev) => ({
+                ...prev,
+                [layerId]: {
+                  tileUrl: data.tileUrl,
+                  sourceLayer: data.sourceLayer,
+                  normalTextureUrl: textureUrl && !textureUrl.startsWith("blob:") ? textureUrl : undefined,
+                },
+              }));
               const label = data.name.trim() || waterLayerName.trim() || `Water Layer ${customWaterCount + 1}`;
               setCustomWaterLayers((prev) => [
                 ...prev,

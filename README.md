@@ -1,29 +1,30 @@
-# 3D Scene Editor (Lite)
+# 3DSceneEditor Monorepo
 
-A lightweight React + Vite + Maplibre + Three.js app that renders vector-tile 3D models, supports picking, gizmo transforms, and outline highlight.
+This repository now contains:
 
-## Setup
+- `frontend/`: React + Vite + TypeScript app (existing scene editor UI)
+- `backend/`: Node.js + TypeScript + Express + Prisma API scaffold
 
-- Install deps: `npm install`
-- Run dev: `npm run dev`
-
-## Required env
-
-Create `.env`:
-
-```
-VITE_STYLE_PATH=<maplibre-style-url-or-path>
-VITE_MAP4D_TILE_URL=<vector-tile-url-template>
-VITE_ROOT_MODEL_URL=<root-url-for-models>
+## Run frontend
+```bash
+npm --prefix frontend install
+npm run dev:frontend
 ```
 
-Example tile URL template: `https://example.com/tiles/{z}/{x}/{y}.pbf`
+## Run backend
+```bash
+npm --prefix backend install
+copy backend\.env.example backend\.env
+npm run prisma:generate
+npm run prisma:migrate
+npm run dev:backend
+```
 
-## Structure
+Backend default URL: `http://localhost:4000`
+Frontend default URL: `http://localhost:5173`
 
-- `src/components/map/MapView.tsx`: map bootstrapping and layer wiring
-- `src/components/map/layers/ModelLayer.ts`: custom 3D model layer + picking
-- `src/components/map/layers/OverlayLayer.ts`: transform gizmo and tooltip
-- `src/components/map/layers/OutlineLayer.ts`: outline highlight
-- `src/components/map/controls/MaplibreTransformControls.ts`: map-aware transform controls
-- `src/components/map/data/*`: tile parsing, conversions, and loaders
+## Next integration step
+Wire frontend save/load scene flow to backend APIs:
+- Upload files to `POST /api/assets/upload`
+- Save scene JSON to `POST /api/scenes` / `PUT /api/scenes/:id`
+- Load scene JSON from `GET /api/scenes/:id`

@@ -5,6 +5,7 @@ import { MaplibreShadowMesh } from "@/components/map/shadow/ShadowGeometry";
 import { calculateSunDirectionMaplibre } from "@/components/map/shadow/ShadowHelper";
 import {
   createLightGroup,
+  decomposeObject,
   type LightGroup,
   type LightGroupOption,
   prepareModelForRender,
@@ -66,6 +67,20 @@ export type DataTileInfoForEditorLayer = {
   objects: Array<ObjectInfoForEditorLayer>;
   sceneTile: THREE.Scene;
   lightGroup?: LightGroup;
+};
+
+export type EditLayerObjectSnapshot = {
+  instanceId: string;
+  name: string;
+  modelUrl: string;
+  coords: { lat: number; lng: number } | null;
+  tile: { z: number; x: number; y: number };
+  scaleUnit: number;
+  transform: {
+    position: [number, number, number];
+    rotation: [number, number, number];
+    scale: [number, number, number];
+  };
 };
 
 type RenderTile = {
@@ -178,7 +193,20 @@ export class EditLayer implements CustomLayerInterface {
     id: string,
     defaultScale: number = 1,
     coords?: { lat: number; lng: number },
-    options?: { instanceId?: string; name?: string },
+    options?: {
+      instanceId?: string;
+      name?: string;
+      initialState?: {
+        tile: { z: number; x: number; y: number };
+        scaleUnit: number;
+        transform: {
+          position: [number, number, number];
+          rotation: [number, number, number];
+          scale: [number, number, number];
+        };
+        coords?: { lat: number; lng: number } | null;
+      };
+    },
   ): void {
     if (!this.map) {
       return;
@@ -194,23 +222,50 @@ export class EditLayer implements CustomLayerInterface {
     const center = this.map.getCenter();
     const lat = coords?.lat ?? center.lat;
     const lng = coords?.lng ?? center.lng;
-    const local = latlonToLocal(lng, lat, this.editorLevel);
+    const initialState = options?.initialState;
+    const local = initialState
+      ? {
+          tileX: initialState.tile.x,
+          tileY: initialState.tile.y,
+          tileZ: initialState.tile.z,
+          coordX: initialState.transform.position[0],
+          coordY: initialState.transform.position[1],
+        }
+      : latlonToLocal(lng, lat, this.editorLevel);
     const key = this.tileKey(local.tileX, local.tileY, local.tileZ);
     const tileData = this.getTileData(key);
     const cloneObj3d = rootObj.clone(true);
-    const scaleUnit = getMetersPerExtentUnit(lat, this.editorLevel);
+    const scaleUnit = initialState?.scaleUnit ?? getMetersPerExtentUnit(lat, this.editorLevel);
     const bearing = 0;
     const objectScale = defaultScale;
     cloneObj3d.name = id;
-    transformModel(
-      local.coordX,
-      local.coordY,
-      0,
-      bearing,
-      objectScale,
-      scaleUnit,
-      cloneObj3d,
-    );
+    if (initialState) {
+      cloneObj3d.position.set(
+        initialState.transform.position[0],
+        initialState.transform.position[1],
+        initialState.transform.position[2],
+      );
+      cloneObj3d.rotation.set(
+        initialState.transform.rotation[0],
+        initialState.transform.rotation[1],
+        initialState.transform.rotation[2],
+      );
+      cloneObj3d.scale.set(
+        initialState.transform.scale[0],
+        initialState.transform.scale[1],
+        initialState.transform.scale[2],
+      );
+    } else {
+      transformModel(
+        local.coordX,
+        local.coordY,
+        0,
+        bearing,
+        objectScale,
+        scaleUnit,
+        cloneObj3d,
+      );
+    }
     cloneObj3d.matrixAutoUpdate = false;
     cloneObj3d.updateMatrix();
     cloneObj3d.updateMatrixWorld(true);
@@ -235,8 +290,8 @@ export class EditLayer implements CustomLayerInterface {
       instanceId: options?.instanceId,
       modelId: id,
       name: options?.name,
-      coords: coords ? { lat, lng } : null,
-      tile: { z: this.editorLevel, x: local.tileX, y: local.tileY },
+      coords: initialState?.coords ?? (coords ? { lat, lng } : null),
+      tile: initialState?.tile ?? { z: this.editorLevel, x: local.tileX, y: local.tileY },
       isModelRoot: true,
       scaleUnit,
       mixer,
@@ -411,6 +466,42 @@ export class EditLayer implements CustomLayerInterface {
       }
     }
     return null;
+  }
+
+  getObjectSnapshots(): EditLayerObjectSnapshot[] {
+    const snapshots: EditLayerObjectSnapshot[] = [];
+    for (const tileData of this.tileCache.values()) {
+      for (const entry of tileData.objects) {
+        const object = entry.object3d;
+        const userData = object.userData as {
+          instanceId?: string;
+          modelId?: string;
+          name?: string;
+          tile?: { z: number; x: number; y: number };
+          scaleUnit?: number;
+        };
+        const modelUrl = userData.modelId ?? object.name;
+        if (!modelUrl) {
+          continue;
+        }
+        const latlon = decomposeObject(object).latlon;
+        const tile = userData.tile ?? { z: this.editorLevel, x: 0, y: 0 };
+        snapshots.push({
+          instanceId: entry.id || userData.instanceId || "",
+          name: entry.name || userData.name || "",
+          modelUrl,
+          coords: { lat: latlon.lat, lng: latlon.lon },
+          tile,
+          scaleUnit: userData.scaleUnit ?? 1,
+          transform: {
+            position: [object.position.x, object.position.y, object.position.z],
+            rotation: [object.rotation.x, object.rotation.y, object.rotation.z],
+            scale: [object.scale.x, object.scale.y, object.scale.z],
+          },
+        });
+      }
+    }
+    return snapshots;
   }
 
   render(): void {
