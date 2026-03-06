@@ -10,7 +10,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "public:sync": "tsx src/scripts/sync-public-assets.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.4.1",

@@ -5,6 +5,7 @@ import { faUpload, faXmark } from "@fortawesome/free-solid-svg-icons";
 type UploadModelModalProps = {
   open: boolean;
   uploading: boolean;
+  kind?: "MODEL" | "IMAGE";
   defaultName?: string;
   onCancel: () => void;
   onConfirm: (payload: { file: File; name: string }) => void;
@@ -17,6 +18,7 @@ function stripFileExtension(fileName: string): string {
 export default function UploadModelModal({
   open,
   uploading,
+  kind = "MODEL",
   defaultName = "",
   onCancel,
   onConfirm,
@@ -52,6 +54,12 @@ export default function UploadModelModal({
     return null;
   }
 
+  const isModel = kind === "MODEL";
+  const entityLabel = isModel ? "Model" : "Image";
+  const acceptValue = isModel
+    ? ".glb,.gltf,.obj,.fbx,.stl,.dae,.3ds,.usdz,.ifc,model/*"
+    : "image/*,.png,.jpg,.jpeg,.webp,.gif,.bmp,.tif,.tiff,.svg";
+
   const handleConfirm = () => {
     if (!file) {
       return;
@@ -74,12 +82,12 @@ export default function UploadModelModal({
       >
         <div className="mb-3 flex items-center justify-between">
           <div id={titleId} className="text-[14px] font-semibold uppercase tracking-[0.06em] text-[var(--text-muted)]">
-            Upload Model
+            Upload {entityLabel}
           </div>
           <button
             type="button"
             onClick={onCancel}
-            aria-label="Close upload model modal"
+            aria-label={`Close upload ${entityLabel.toLowerCase()} modal`}
             className="flex h-8 w-8 items-center justify-center rounded-md border-0 bg-transparent text-[13px] text-[var(--text)] transition hover:bg-[var(--btn-hover)]"
           >
             <FontAwesomeIcon icon={faXmark} />
@@ -87,13 +95,13 @@ export default function UploadModelModal({
         </div>
 
         <label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--text-muted)]" htmlFor={fileId}>
-          Model File
+          {entityLabel} File
         </label>
         <input
           ref={fileInputRef}
           id={fileId}
           type="file"
-          accept=".glb,.gltf,.obj,.fbx,.stl,.dae,.3ds,.usdz,.ifc,model/*"
+          accept={acceptValue}
           onChange={(event) => {
             const nextFile = event.target.files?.[0] ?? null;
             setFile(nextFile);
@@ -105,7 +113,7 @@ export default function UploadModelModal({
         />
 
         <label className="mt-3 block text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--text-muted)]" htmlFor={nameId}>
-          Model Name
+          {entityLabel} Name
         </label>
         <input
           id={nameId}
@@ -115,7 +123,7 @@ export default function UploadModelModal({
             setName(event.target.value);
           }}
           className="mt-1 h-10 w-full rounded-md border border-[var(--btn-border)] bg-[var(--btn-bg)] px-3 text-[13px] text-[var(--text)] outline-none transition focus:border-[var(--btn-active-border)] focus:ring-2 focus:ring-[var(--focus-ring)]/40"
-          placeholder="Enter model name"
+          placeholder={`Enter ${entityLabel.toLowerCase()} name`}
         />
 
         <div className="mt-4 flex items-center justify-end gap-2">

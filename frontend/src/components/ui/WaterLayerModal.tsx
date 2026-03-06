@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { AssetDto } from "@/services/assetService";
-import MyWaterImagePicker from "@/components/ui/MyWaterImagePicker";
+import MyImagePicker from "@/components/ui/MyImagePicker";
 
 type WaterLayerModalProps = {
   open: boolean;
@@ -127,7 +127,7 @@ export default function WaterLayerModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative z-1 w-[min(92vw,360px)] rounded-xl border border-(--panel-border) bg-(--panel-bg) p-4 text-(--text) shadow-(--panel-shadow)"
+        className="relative z-1 max-h-[92vh] w-[min(94vw,820px)] overflow-y-auto rounded-xl border border-(--panel-border) bg-(--panel-bg) p-4 text-(--text) shadow-(--panel-shadow)"
       >
         <div id={titleId} className="text-[15px] font-semibold">
           Add Water Layer
@@ -221,11 +221,17 @@ export default function WaterLayerModal({
         ) : null}
 
         <div id={imageLibraryId} className="mt-3">
-          <MyWaterImagePicker
+          <MyImagePicker
             assets={imageAssets}
             loading={false}
-            selectedId={selectedImageAssetId}
-            onChangeSelectedId={onChangeSelectedImageAssetId}
+            selectedIds={selectedImageAssetId ? [selectedImageAssetId] : []}
+            onChangeSelectedIds={(ids) => onChangeSelectedImageAssetId(ids[0] ?? null)}
+            multi={false}
+            title="Texture from your library"
+            emptyText="No images in your library."
+            searchPlaceholder="Search images..."
+            gridCols={3}
+            listMaxHeightClass="max-h-[56vh]"
           />
         </div>
         <div className="mt-1 text-[11px] text-(--text-muted)">

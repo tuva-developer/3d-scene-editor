@@ -7,12 +7,18 @@ import FormData from "form-data";
 import { prisma } from "../lib/prisma.js";
 
 const uploadDir = process.env.UPLOAD_DIR ?? "./uploads";
-const remoteServiceUrl =
+const remoteServiceBaseUrl =
   process.env.FILE_SERVICE_URL?.trim() ||
   process.env.FILE_SERVICE_UPLOAD_URL?.trim() ||
   process.env.FILE_SERVICE_DELETE_URL?.trim() ||
   process.env.FILE_SERVICE_GET_URL?.trim() ||
   "";
+const remoteServiceUrl = ensureRemoteEndpoint(remoteServiceBaseUrl, "/3dservice/v1/file");
+const remoteListServiceUrl =
+  ensureRemoteEndpoint(
+    process.env.FILE_SERVICE_LIST_URL?.trim() || deriveListServiceUrl(remoteServiceUrl),
+    "/3dservice/v1/fileName",
+  );
 const remoteTimeoutMs = Number(process.env.FILE_SERVICE_TIMEOUT_MS ?? 30000);
 const modelStorageKey = normalizeStorageKey(
   process.env.FILE_SERVICE_MODEL_KEY?.trim() || "/models",
@@ -20,12 +26,48 @@ const modelStorageKey = normalizeStorageKey(
 const imageStorageKey = normalizeStorageKey(
   process.env.FILE_SERVICE_IMAGE_KEY?.trim() || "/images",
 );
+const publicModelStorageKey = normalizeStorageKey(
+  process.env.FILE_SERVICE_PUBLIC_MODEL_KEY?.trim() || "/public/models",
+);
+const publicImageStorageKey = normalizeStorageKey(
+  process.env.FILE_SERVICE_PUBLIC_IMAGE_KEY?.trim() || "/public/images",
+);
 const defaultStorageKey = normalizeStorageKey(
   process.env.FILE_SERVICE_DEFAULT_KEY?.trim() || modelStorageKey,
 );
 
 function normalizeStorageKey(key: string): string {
   return key.startsWith("/") ? key : `/${key}`;
+}
+
+function deriveListServiceUrl(baseUrl: string): string {
+  if (!baseUrl) {
+    return "";
+  }
+  try {
+    const url = new URL(baseUrl);
+    url.pathname = url.pathname.replace(/\/file$/i, "/fileName");
+    return url.toString();
+  } catch {
+    return baseUrl.replace(/\/file$/i, "/fileName");
+  }
+}
+
+function ensureRemoteEndpoint(urlValue: string, fallbackPath: string): string {
+  if (!urlValue) {
+    return "";
+  }
+  try {
+    const url = new URL(urlValue);
+    const normalizedPath = url.pathname.trim();
+    if (!normalizedPath || normalizedPath === "/") {
+      url.pathname = fallbackPath;
+      return url.toString();
+    }
+    return url.toString();
+  } catch {
+    return urlValue;
+  }
 }
 
 function toUserScopedKey(userId: string, key: string): string {
@@ -96,6 +138,131 @@ function getStorageKeyForFile(file: Express.Multer.File): string {
     return modelStorageKey;
   }
   return defaultStorageKey;
+}
+
+function guessMimeType(fileName: string, kind: "MODEL" | "IMAGE" | "OTHER"): string {
+  const ext = path.extname(fileName).toLowerCase();
+  if (kind === "MODEL") {
+    if (ext === ".glb") return "model/gltf-binary";
+    if (ext === ".gltf") return "model/gltf+json";
+    if (ext === ".obj") return "text/plain";
+    if (ext === ".fbx") return "application/octet-stream";
+    if (ext === ".stl") return "model/stl";
+    return "application/octet-stream";
+  }
+  if (kind === "IMAGE") {
+    if (ext === ".png") return "image/png";
+    if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+    if (ext === ".webp") return "image/webp";
+    if (ext === ".gif") return "image/gif";
+    if (ext === ".svg") return "image/svg+xml";
+    return "application/octet-stream";
+  }
+  return "application/octet-stream";
+}
+
+function isModelFileName(fileName: string): boolean {
+  const ext = path.extname(fileName).toLowerCase();
+  return new Set([
+    ".glb",
+    ".gltf",
+    ".obj",
+    ".fbx",
+    ".stl",
+    ".dae",
+    ".3ds",
+    ".usdz",
+    ".ifc",
+  ]).has(ext);
+}
+
+function isImageFileName(fileName: string): boolean {
+  const ext = path.extname(fileName).toLowerCase();
+  return new Set([
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".webp",
+    ".gif",
+    ".bmp",
+    ".tif",
+    ".tiff",
+    ".svg",
+  ]).has(ext);
+}
+
+function collectFileNames(source: unknown): string[] {
+  const names = new Set<string>();
+  const visit = (value: unknown): void => {
+    if (!value) {
+      return;
+    }
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed.includes(".")) {
+        names.add(path.posix.basename(trimmed));
+      }
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    if (typeof value === "object") {
+      const obj = value as Record<string, unknown>;
+      const directCandidates = [
+        "fileName",
+        "filename",
+        "name",
+        "objectName",
+        "key",
+      ];
+      directCandidates.forEach((key) => {
+        const next = obj[key];
+        if (typeof next === "string") {
+          const trimmed = next.trim();
+          if (trimmed.includes(".")) {
+            names.add(path.posix.basename(trimmed));
+          }
+        }
+      });
+      Object.values(obj).forEach(visit);
+    }
+  };
+  visit(source);
+  return Array.from(names);
+}
+
+function buildPublicAssetPath(key: string, fileName: string): string {
+  return `${key.replace(/\/+$/, "")}/${path.posix.basename(fileName)}`;
+}
+
+function toPublicAssetDto(asset: {
+  id: string;
+  kind: "MODEL" | "IMAGE" | "OTHER";
+  name: string | null;
+  filename: string;
+  mimeType: string;
+  size: number;
+  path: string;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  const key = asset.kind === "IMAGE" ? publicImageStorageKey : publicModelStorageKey;
+  return {
+    id: asset.id,
+    ownerId: "public",
+    kind: asset.kind,
+    name: asset.name,
+    filename: asset.filename,
+    mimeType: asset.mimeType,
+    size: asset.size,
+    path: asset.path,
+    createdAt: asset.createdAt,
+    updatedAt: asset.updatedAt,
+    isPublic: true,
+    url: `/api/assets/public/content?fileName=${encodeURIComponent(asset.filename)}&key=${encodeURIComponent(key)}`,
+  };
 }
 
 const memoryUpload = multer({
@@ -374,6 +541,56 @@ async function getFromRemoteStorage(
   }
 }
 
+async function listFilesFromRemoteStorage(key: string): Promise<string[]> {
+  if (!remoteListServiceUrl && !remoteServiceUrl) {
+    throw new Error("FILE_SERVICE_LIST_URL is not configured");
+  }
+  const candidates = Array.from(
+    new Set([
+      remoteListServiceUrl,
+      deriveListServiceUrl(remoteServiceUrl),
+      remoteServiceUrl,
+    ].filter((item): item is string => !!item)),
+  );
+  const keyVariants = [key];
+  let lastError: Error | null = null;
+  for (const url of candidates) {
+    for (const keyCandidate of keyVariants) {
+      try {
+        const response = await axios.get(url, {
+          params: { key: keyCandidate },
+          timeout: remoteTimeoutMs,
+          validateStatus: () => true,
+        });
+        if (response.status < 200 || response.status >= 300) {
+          const text =
+            typeof response.data === "string"
+              ? response.data
+              : JSON.stringify(response.data);
+          lastError = new Error(
+            `Remote storage list failed (${response.status}) at ${url}: ${text ?? ""}`,
+          );
+          continue;
+        }
+        const names = collectFileNames(response.data);
+        if (names.length > 0) {
+          return names.sort((a, b) => a.localeCompare(b));
+        }
+      } catch (error) {
+        if (axios.isAxiosError(error) && error.code === "ECONNABORTED") {
+          lastError = new Error(`Remote storage list timeout after ${remoteTimeoutMs}ms`);
+        } else {
+          lastError = error instanceof Error ? error : new Error("Remote storage list failed");
+        }
+      }
+    }
+  }
+  if (lastError) {
+    throw lastError;
+  }
+  return [];
+}
+
 async function handleUploadAsset(
   req: Request,
   res: Response,
@@ -447,19 +664,28 @@ assetRouter.get("/", async (req, res, next) => {
       typeof req.query.kind === "string" ? req.query.kind.trim().toUpperCase() : "";
     const kindFilter =
       kindQuery === "MODEL" || kindQuery === "IMAGE" || kindQuery === "OTHER" ? kindQuery : undefined;
-    const assets = await prisma.asset.findMany({
+    const privateAssets = await prisma.asset.findMany({
       where: {
         ownerId: req.currentUser.id,
         ...(kindFilter ? { kind: kindFilter } : {}),
       },
       orderBy: { createdAt: "desc" },
     });
-    res.json(
-      assets.map((asset) => ({
+    const publicAssets = await prisma.publicAsset.findMany({
+      where: {
+        isActive: true,
+        ...(kindFilter ? { kind: kindFilter } : {}),
+      },
+      orderBy: [{ updatedAt: "desc" }, { filename: "asc" }],
+    });
+    res.json({
+      privateAssets: privateAssets.map((asset) => ({
         ...asset,
+        isPublic: false,
         url: `/api/assets/${asset.id}/content`,
       })),
-    );
+      publicAssets: publicAssets.map((asset) => toPublicAssetDto(asset)),
+    });
   } catch (error) {
     next(error);
   }
@@ -515,6 +741,143 @@ async function handleGetRemoteFile(
 }
 
 assetRouter.get("/file", handleGetRemoteFile);
+
+assetRouter.get("/public", async (req, res, next) => {
+  try {
+    const kindQuery =
+      typeof req.query.kind === "string" ? req.query.kind.trim().toUpperCase() : "";
+    const kind = kindQuery === "IMAGE" ? "IMAGE" : "MODEL";
+    const rows = await prisma.publicAsset.findMany({
+      where: { kind, isActive: true },
+      orderBy: [{ updatedAt: "desc" }, { filename: "asc" }],
+    });
+    res.json(rows.map((row) => toPublicAssetDto(row)));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to load public assets";
+    return res.status(502).json({ message });
+  }
+});
+
+assetRouter.post("/public/sync", async (req, res, next) => {
+  try {
+    if (!req.currentUser) {
+      return res.status(401).json({ message: "unauthorized" });
+    }
+    const kindQuery =
+      typeof req.query.kind === "string" ? req.query.kind.trim().toUpperCase() : "";
+    const kindParam =
+      typeof req.body?.kind === "string" ? req.body.kind.trim().toUpperCase() : "";
+    const requestedKind = kindQuery || kindParam;
+    const syncKinds: Array<"MODEL" | "IMAGE"> =
+      requestedKind === "MODEL" || requestedKind === "IMAGE"
+        ? [requestedKind]
+        : ["MODEL", "IMAGE"];
+
+    const result: Array<{
+      kind: "MODEL" | "IMAGE";
+      scanned: number;
+      upserted: number;
+      deactivated: number;
+    }> = [];
+
+    for (const kind of syncKinds) {
+      const key = kind === "MODEL" ? publicModelStorageKey : publicImageStorageKey;
+      const filesRaw = await listFilesFromRemoteStorage(key);
+      const filtered = filesRaw.filter((fileName) =>
+        kind === "MODEL" ? isModelFileName(fileName) : isImageFileName(fileName),
+      );
+      const uniqueFileNames = Array.from(
+        new Set(filtered.map((fileName) => path.posix.basename(fileName))),
+      );
+
+      const activePaths: string[] = [];
+      let upserted = 0;
+
+      for (const fileName of uniqueFileNames) {
+        const storagePath = buildPublicAssetPath(key, fileName);
+        activePaths.push(storagePath);
+        const name = fileName.replace(/\.[^/.]+$/, "") || fileName;
+        await prisma.publicAsset.upsert({
+          where: { path: storagePath },
+          update: {
+            kind,
+            name,
+            filename: fileName,
+            mimeType: guessMimeType(fileName, kind),
+            isActive: true,
+          },
+          create: {
+            kind,
+            name,
+            filename: fileName,
+            mimeType: guessMimeType(fileName, kind),
+            size: 0,
+            path: storagePath,
+            isActive: true,
+          },
+        });
+        upserted += 1;
+      }
+
+      const deactivateWhere =
+        activePaths.length > 0
+          ? { kind, path: { notIn: activePaths }, isActive: true }
+          : { kind, isActive: true };
+      const deactivated = await prisma.publicAsset.updateMany({
+        where: deactivateWhere,
+        data: { isActive: false },
+      });
+
+      result.push({
+        kind,
+        scanned: uniqueFileNames.length,
+        upserted,
+        deactivated: deactivated.count,
+      });
+    }
+
+    return res.json({ synced: result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+assetRouter.get("/public/content", async (req, res, next) => {
+  try {
+    const fileName =
+      typeof req.query.fileName === "string" ? req.query.fileName.trim() : "";
+    const keyRaw =
+      typeof req.query.key === "string" ? req.query.key.trim() : "";
+    if (!fileName || !keyRaw) {
+      return res.status(400).json({ message: "fileName and key are required" });
+    }
+    const key = normalizeStorageKey(keyRaw);
+    const allowedKeys = new Set([publicModelStorageKey, publicImageStorageKey]);
+    if (!allowedKeys.has(key)) {
+      return res.status(403).json({ message: "invalid public key" });
+    }
+    const expectedPath = buildPublicAssetPath(key, fileName);
+    const found = await prisma.publicAsset.findFirst({
+      where: { path: expectedPath, isActive: true },
+    });
+    if (!found) {
+      return res.status(404).json({ message: "public asset not found" });
+    }
+    const remote = await getFromRemoteStorage(fileName, key);
+    res.setHeader("Content-Type", remote.contentType);
+    if (remote.contentDisposition) {
+      res.setHeader("Content-Disposition", remote.contentDisposition);
+    } else {
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename=\"${encodeURIComponent(fileName)}\"`,
+      );
+    }
+    return res.status(200).send(Buffer.from(remote.bytes));
+  } catch (error) {
+    next(error);
+  }
+});
 
 assetRouter.get("/:id", async (req, res, next) => {
   try {

@@ -589,12 +589,12 @@ export const EditorToolbar = ({
 
         {isEditor && onOpenModelManager ? (
           <div className={groupClassName}>
-            <span className={labelClassName}>Models</span>
+            <span className={labelClassName}>Assets</span>
             <button
               className={`${buttonBaseClassName} ${buttonIconClassName}`}
               onClick={onOpenModelManager}
-              title="Manage Models"
-              aria-label="Manage Models"
+              title="Manage Assets"
+              aria-label="Manage Assets"
               type="button"
             >
               <FontAwesomeIcon icon={faCubes} />

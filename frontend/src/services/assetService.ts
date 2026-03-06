@@ -11,6 +11,7 @@ export type AssetDto = {
   path: string;
   createdAt: string;
   updatedAt: string;
+  isPublic?: boolean;
   url?: string;
 };
 
@@ -32,6 +33,11 @@ export type DeleteAssetResponse = {
   remote: unknown;
 };
 
+export type ListAssetsResponse = {
+  privateAssets: AssetDto[];
+  publicAssets: AssetDto[];
+};
+
 export const assetService = {
   upload(file: File, key?: string, name?: string) {
     const formData = new FormData();
@@ -50,7 +56,7 @@ export const assetService = {
 
   list(kind?: AssetDto["kind"]) {
     const query = kind ? `?kind=${encodeURIComponent(kind)}` : "";
-    return apiRequest<AssetDto[]>(`/assets${query}`);
+    return apiRequest<ListAssetsResponse>(`/assets${query}`);
   },
 
   getById(assetId: string) {

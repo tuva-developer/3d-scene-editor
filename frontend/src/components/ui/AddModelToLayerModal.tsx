@@ -56,7 +56,7 @@ export default function AddModelToLayerModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative z-1 w-[min(92vw,480px)] rounded-xl border border-(--panel-border) bg-(--panel-bg) p-4 text-(--text) shadow-(--panel-shadow)"
+        className="relative z-1 max-h-[92vh] w-[min(94vw,760px)] overflow-y-auto rounded-xl border border-(--panel-border) bg-(--panel-bg) p-4 text-(--text) shadow-(--panel-shadow)"
       >
         <div id={titleId} className="text-[15px] font-semibold">
           {title}

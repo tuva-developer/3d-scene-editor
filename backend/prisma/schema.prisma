@@ -58,3 +58,18 @@ model User {
   assets Asset[]
   scenes Scene[]
 }
+
+model PublicAsset {
+  id        String    @id @default(cuid())
+  kind      AssetKind @default(OTHER)
+  name      String?
+  filename  String
+  mimeType  String
+  size      Int       @default(0)
+  path      String    @unique
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([kind, isActive])
+}

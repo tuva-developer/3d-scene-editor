@@ -11,7 +11,7 @@ import TimeShadowBar from "@/components/ui/TimeShadowBar";
 import LoginModal from "@/components/ui/LoginModal";
 import RightInspectorPanel from "@/components/ui/RightInspectorPanel";
 import SceneLibraryModal from "@/components/ui/SceneLibraryModal";
-import ModelLibraryModal from "@/components/ui/ModelLibraryModal";
+import AssetLibraryModal from "@/components/ui/AssetLibraryModal";
 import UploadModelModal from "@/components/ui/UploadModelModal";
 import { useAuth } from "@/contexts/AuthContext";
 import type { LayerModelInfo, LayerOption, ThemeMode, TransformMode, TransformValues } from "@/types/common";
@@ -20,7 +20,7 @@ import type { LightGroupOption } from "@/components/map/data/models/objModel";
 import { DEFAULT_WATER_SETTINGS, type WaterSettings } from "@/components/map/water/WaterMaterial";
 import { sceneService, type SceneDto } from "@/services/sceneService";
 import { assetService, type AssetDto } from "@/services/assetService";
-import { apiRequest, buildAssetContentUrl } from "@/services/apiClient";
+import { apiRequest } from "@/services/apiClient";
 
 const NO_ACTIVE_LAYER_ID = "__no_active_layer__";
 
@@ -142,6 +142,8 @@ function App() {
   const [modelLibraryUploading, setModelLibraryUploading] = useState(false);
   const [modelLibraryDeletingId, setModelLibraryDeletingId] = useState<string | null>(null);
   const [imageLibraryAssets, setImageLibraryAssets] = useState<AssetDto[]>([]);
+  const [imageLibraryLoading, setImageLibraryLoading] = useState(false);
+  const [assetUploadKind, setAssetUploadKind] = useState<"MODEL" | "IMAGE">("MODEL");
   const instanceBlobUrlsRef = useRef<Map<string, string[]>>(new Map());
   const waterBlobUrlsRef = useRef<Map<string, string>>(new Map());
   const [theme, setTheme] = useState<ThemeMode>(() => {
@@ -328,8 +330,10 @@ function App() {
   const loadModelLibraryAssets = async () => {
     setModelLibraryLoading(true);
     try {
-      const assets = await assetService.list("MODEL");
-      setModelLibraryAssets(assets);
+      const response = await assetService.list("MODEL");
+      const privateAssets = response.privateAssets ?? [];
+      const publicAssets = response.publicAssets ?? [];
+      setModelLibraryAssets([...privateAssets, ...publicAssets]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load model assets.";
       window.alert(message);
@@ -340,36 +344,49 @@ function App() {
   };
 
   const loadImageLibraryAssets = async () => {
+    setImageLibraryLoading(true);
     try {
-      const assets = await assetService.list("IMAGE");
-      setImageLibraryAssets(assets);
+      const response = await assetService.list("IMAGE");
+      const privateAssets = response.privateAssets ?? [];
+      const publicAssets = response.publicAssets ?? [];
+      setImageLibraryAssets([...privateAssets, ...publicAssets]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load image assets.";
       window.alert(message);
       setImageLibraryAssets([]);
+    } finally {
+      setImageLibraryLoading(false);
     }
   };
 
   const downloadAssetAsDataUrl = async (asset: AssetDto): Promise<string> => {
-    const bytes = await apiRequest<ArrayBuffer>(`/assets/${asset.id}/content`);
+    const contentPath = asset.isPublic && asset.url
+      ? asset.url.replace(/^\/api/, "")
+      : `/assets/${asset.id}/content`;
+    const bytes = await apiRequest<ArrayBuffer>(contentPath);
     const blob = new Blob([bytes], { type: asset.mimeType || "application/octet-stream" });
     return readBlobAsDataUrl(blob);
   };
 
   const handleOpenModelLibrary = async () => {
     setModelLibraryOpen(true);
-    await loadModelLibraryAssets();
+    await Promise.all([loadModelLibraryAssets(), loadImageLibraryAssets()]);
   };
 
   const handleUploadModel = async (payload: { file: File; name: string }) => {
     const { file, name } = payload;
     setModelLibraryUploading(true);
     try {
-      await assetService.upload(file, "/models", name);
-      await loadModelLibraryAssets();
+      const key = assetUploadKind === "IMAGE" ? "/images" : "/models";
+      await assetService.upload(file, key, name);
+      if (assetUploadKind === "IMAGE") {
+        await loadImageLibraryAssets();
+      } else {
+        await loadModelLibraryAssets();
+      }
       setUploadModelModalOpen(false);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to upload model.";
+      const message = error instanceof Error ? error.message : "Failed to upload asset.";
       window.alert(message);
     } finally {
       setModelLibraryUploading(false);
@@ -377,16 +394,24 @@ function App() {
   };
 
   const handleDeleteModelAsset = async (asset: AssetDto) => {
-    const ok = window.confirm(`Delete model "${asset.filename}"?`);
+    if (asset.isPublic || asset.ownerId === "public") {
+      window.alert("Public asset cannot be deleted.");
+      return;
+    }
+    const ok = window.confirm(`Delete asset "${asset.filename}"?`);
     if (!ok) {
       return;
     }
     setModelLibraryDeletingId(asset.id);
     try {
       await assetService.delete(asset.id);
-      await loadModelLibraryAssets();
+      if (asset.kind === "IMAGE") {
+        await loadImageLibraryAssets();
+      } else {
+        await loadModelLibraryAssets();
+      }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to delete model.";
+      const message = error instanceof Error ? error.message : "Failed to delete asset.";
       window.alert(message);
     } finally {
       setModelLibraryDeletingId(null);
@@ -394,7 +419,11 @@ function App() {
   };
 
   const handleCopyModelUrl = async (asset: AssetDto) => {
-    const url = buildAssetContentUrl(asset.id);
+    const apiPath = asset.isPublic && asset.url ? asset.url : `/api/assets/${asset.id}/content`;
+    const url =
+      typeof window === "undefined"
+        ? apiPath
+        : new URL(apiPath, window.location.origin).toString();
     try {
       await navigator.clipboard.writeText(url);
       window.alert("Model URL copied.");
@@ -1302,20 +1331,32 @@ function App() {
         onConfirmLoad={handleConfirmLoadScene}
         onDeleteScene={handleDeleteScene}
       />
-      <ModelLibraryModal
+      <AssetLibraryModal
         open={modelLibraryOpen}
-        assets={modelLibraryAssets}
-        loading={modelLibraryLoading}
+        modelAssets={modelLibraryAssets}
+        imageAssets={imageLibraryAssets}
+        modelLoading={modelLibraryLoading}
+        imageLoading={imageLibraryLoading}
         deletingAssetId={modelLibraryDeletingId}
         onClose={() => setModelLibraryOpen(false)}
-        onRefresh={loadModelLibraryAssets}
-        onOpenUpload={() => setUploadModelModalOpen(true)}
+        onRefresh={(kind) => {
+          if (kind === "IMAGE") {
+            loadImageLibraryAssets();
+            return;
+          }
+          loadModelLibraryAssets();
+        }}
+        onOpenUpload={(kind) => {
+          setAssetUploadKind(kind);
+          setUploadModelModalOpen(true);
+        }}
         onDelete={handleDeleteModelAsset}
         onCopyUrl={handleCopyModelUrl}
       />
       <UploadModelModal
         open={uploadModelModalOpen}
         uploading={modelLibraryUploading}
+        kind={assetUploadKind}
         onCancel={() => setUploadModelModalOpen(false)}
         onConfirm={handleUploadModel}
       />

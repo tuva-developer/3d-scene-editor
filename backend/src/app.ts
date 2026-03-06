@@ -16,5 +16,11 @@ export function createApp() {
   app.use("/api", resolveCurrentUser);
   app.use("/api", router);
 
+  app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    const message = error instanceof Error ? error.message : "internal server error";
+    console.error("[api-error]", message);
+    res.status(500).json({ message });
+  });
+
   return app;
 }
