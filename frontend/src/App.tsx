@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import MapView from "@/components/map/MapView";
 import { EditorToolbar } from "@/components/toolbar/EditorToolbar";
 import LayerNameModal from "@/components/ui/LayerNameModal";
+import AddModelToLayerModal from "@/components/ui/AddModelToLayerModal";
 import InstanceLayerModal from "@/components/ui/InstanceLayerModal";
 import WaterLayerModal from "@/components/ui/WaterLayerModal";
 import WaterSettingsModal from "@/components/ui/WaterSettingsModal";
@@ -9,11 +10,17 @@ import LightSettingsModal, { type LightIntensitySettings } from "@/components/ui
 import TimeShadowBar from "@/components/ui/TimeShadowBar";
 import LoginModal from "@/components/ui/LoginModal";
 import RightInspectorPanel from "@/components/ui/RightInspectorPanel";
+import SceneLibraryModal from "@/components/ui/SceneLibraryModal";
+import ModelLibraryModal from "@/components/ui/ModelLibraryModal";
+import UploadModelModal from "@/components/ui/UploadModelModal";
 import { useAuth } from "@/contexts/AuthContext";
 import type { LayerModelInfo, LayerOption, ThemeMode, TransformMode, TransformValues } from "@/types/common";
 import type { MapViewHandle } from "@/components/map/MapView";
 import type { LightGroupOption } from "@/components/map/data/models/objModel";
 import { DEFAULT_WATER_SETTINGS, type WaterSettings } from "@/components/map/water/WaterMaterial";
+import { sceneService, type SceneDto } from "@/services/sceneService";
+import { assetService, type AssetDto } from "@/services/assetService";
+import { apiRequest, buildAssetContentUrl } from "@/services/apiClient";
 
 const NO_ACTIVE_LAYER_ID = "__no_active_layer__";
 
@@ -102,7 +109,7 @@ function App() {
   const [snowDensity, setSnowDensity] = useState(1.3);
   const [transformValues, setTransformValues] = useState<TransformValues | null>(null);
   const [instanceLayerModalOpen, setInstanceLayerModalOpen] = useState(false);
-  const [instanceModelFiles, setInstanceModelFiles] = useState<File[]>([]);
+  const [instanceModelAssetIds, setInstanceModelAssetIds] = useState<string[]>([]);
   const [instanceLayerName, setInstanceLayerName] = useState("Custom Layer 1");
   const [customInstanceLayers, setCustomInstanceLayers] = useState<LayerOption[]>([]);
   const [instanceLayerConfigs, setInstanceLayerConfigs] = useState<
@@ -110,7 +117,7 @@ function App() {
   >({});
   const [waterLayerModalOpen, setWaterLayerModalOpen] = useState(false);
   const [waterLayerName, setWaterLayerName] = useState("Water Layer 1");
-  const [waterTextureFile, setWaterTextureFile] = useState<File | null>(null);
+  const [waterTextureAssetId, setWaterTextureAssetId] = useState<string | null>(null);
   const [customWaterLayers, setCustomWaterLayers] = useState<LayerOption[]>([]);
   const [waterLayerConfigs, setWaterLayerConfigs] = useState<
     Record<string, { tileUrl: string; sourceLayer: string; normalTextureUrl?: string }>
@@ -123,9 +130,20 @@ function App() {
   const [lightSettingsModalOpen, setLightSettingsModalOpen] = useState(false);
   const [lightSettingsTargetId, setLightSettingsTargetId] = useState<string | null>(null);
   const [lightSettingsBaseline, setLightSettingsBaseline] = useState<LightIntensitySettings | null>(null);
+  const [sceneModalOpen, setSceneModalOpen] = useState(false);
+  const [sceneModalMode, setSceneModalMode] = useState<"save" | "load">("save");
+  const [sceneModalLoading, setSceneModalLoading] = useState(false);
+  const [sceneModalSubmitting, setSceneModalSubmitting] = useState(false);
+  const [sceneModalScenes, setSceneModalScenes] = useState<SceneDto[]>([]);
+  const [modelLibraryOpen, setModelLibraryOpen] = useState(false);
+  const [uploadModelModalOpen, setUploadModelModalOpen] = useState(false);
+  const [modelLibraryAssets, setModelLibraryAssets] = useState<AssetDto[]>([]);
+  const [modelLibraryLoading, setModelLibraryLoading] = useState(false);
+  const [modelLibraryUploading, setModelLibraryUploading] = useState(false);
+  const [modelLibraryDeletingId, setModelLibraryDeletingId] = useState<string | null>(null);
+  const [imageLibraryAssets, setImageLibraryAssets] = useState<AssetDto[]>([]);
   const instanceBlobUrlsRef = useRef<Map<string, string[]>>(new Map());
   const waterBlobUrlsRef = useRef<Map<string, string>>(new Map());
-  const importSceneInputRef = useRef<HTMLInputElement>(null);
   const [theme, setTheme] = useState<ThemeMode>(() => {
     if (typeof window === "undefined") {
       return "dark";
@@ -144,16 +162,6 @@ function App() {
     "http://10.222.3.81:8083/VietbandoMapService/api/image/?Function=GetVectorTile&MapName=IndoorNavigation&Level={z}&TileX={x}&TileY={y}&UseTileCache=true";
   const defaultInstanceSourceLayer =
     (import.meta.env.VITE_INSTANCE_SOURCE_LAYER as string | undefined)?.trim() || "trees";
-  const defaultInstanceModelUrls = useMemo(
-    () => [
-      "/test_data/test_instance/tree2.glb",
-      "/test_data/test_instance/tree3.glb",
-      "/test_data/test_instance/tree4.glb",
-      "/test_data/test_instance/tree5.glb",
-      "/test_data/test_instance/tree6.glb",
-    ],
-    []
-  );
   const defaultWaterTileUrl =
     (import.meta.env.VITE_WATER_TILE_URL as string | undefined)?.trim() ||
     "https://images.daklak.gov.vn/v2/tile/{z}/{x}/{y}/306ec9b5-8146-4a83-9271-bd7b343a574a";
@@ -282,6 +290,9 @@ function App() {
       return file.name;
     }
     if (modelUrl) {
+      if (modelUrl.startsWith("data:")) {
+        return "model.glb";
+      }
       const trimmed = modelUrl.split("?")[0];
       const parts = trimmed.split("/");
       return parts[parts.length - 1] || "model.glb";
@@ -306,13 +317,91 @@ function App() {
     };
   };
 
-  const readFileAsDataUrl = (file: File): Promise<string> =>
+  const readBlobAsDataUrl = (blob: Blob): Promise<string> =>
     new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
-      reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
-      reader.readAsDataURL(file);
+      reader.onerror = () => reject(reader.error ?? new Error("Failed to read blob"));
+      reader.readAsDataURL(blob);
     });
+
+  const loadModelLibraryAssets = async () => {
+    setModelLibraryLoading(true);
+    try {
+      const assets = await assetService.list("MODEL");
+      setModelLibraryAssets(assets);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load model assets.";
+      window.alert(message);
+      setModelLibraryAssets([]);
+    } finally {
+      setModelLibraryLoading(false);
+    }
+  };
+
+  const loadImageLibraryAssets = async () => {
+    try {
+      const assets = await assetService.list("IMAGE");
+      setImageLibraryAssets(assets);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load image assets.";
+      window.alert(message);
+      setImageLibraryAssets([]);
+    }
+  };
+
+  const downloadAssetAsDataUrl = async (asset: AssetDto): Promise<string> => {
+    const bytes = await apiRequest<ArrayBuffer>(`/assets/${asset.id}/content`);
+    const blob = new Blob([bytes], { type: asset.mimeType || "application/octet-stream" });
+    return readBlobAsDataUrl(blob);
+  };
+
+  const handleOpenModelLibrary = async () => {
+    setModelLibraryOpen(true);
+    await loadModelLibraryAssets();
+  };
+
+  const handleUploadModel = async (payload: { file: File; name: string }) => {
+    const { file, name } = payload;
+    setModelLibraryUploading(true);
+    try {
+      await assetService.upload(file, "/models", name);
+      await loadModelLibraryAssets();
+      setUploadModelModalOpen(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to upload model.";
+      window.alert(message);
+    } finally {
+      setModelLibraryUploading(false);
+    }
+  };
+
+  const handleDeleteModelAsset = async (asset: AssetDto) => {
+    const ok = window.confirm(`Delete model "${asset.filename}"?`);
+    if (!ok) {
+      return;
+    }
+    setModelLibraryDeletingId(asset.id);
+    try {
+      await assetService.delete(asset.id);
+      await loadModelLibraryAssets();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete model.";
+      window.alert(message);
+    } finally {
+      setModelLibraryDeletingId(null);
+    }
+  };
+
+  const handleCopyModelUrl = async (asset: AssetDto) => {
+    const url = buildAssetContentUrl(asset.id);
+    try {
+      await navigator.clipboard.writeText(url);
+      window.alert("Model URL copied.");
+    } catch {
+      window.prompt("Copy model URL", url);
+    }
+  };
 
   useEffect(() => {
     if (activeLayerId === NO_ACTIVE_LAYER_ID) {
@@ -478,12 +567,16 @@ function App() {
   const openInstanceLayerModal = () => {
     const defaultName = `Custom Layer ${customLayerCount + 1}`;
     setInstanceLayerName(defaultName);
+    setInstanceModelAssetIds([]);
+    loadModelLibraryAssets();
     setInstanceLayerModalOpen(true);
   };
 
   const openWaterLayerModal = () => {
     const defaultName = `Water Layer ${customWaterCount + 1}`;
     setWaterLayerName(defaultName);
+    setWaterTextureAssetId(null);
+    loadImageLibraryAssets();
     setWaterLayerModalOpen(true);
   };
 
@@ -520,19 +613,34 @@ function App() {
     setModelModalTargetId(layerId);
     setModelModalTitle(targetLayer ? `Add Model to ${targetLayer.label}` : "Add Model");
     setModelModalOpen(true);
+    loadModelLibraryAssets();
     setActiveLayerId(layerId);
   };
 
   const handleConfirmAddModel = async (
     layerId: string,
-    _name: string,
-    file: File | null,
+    assetId: string,
     coords: { lat: number; lng: number } | null
   ) => {
-    const modelUrl = file ? await readFileAsDataUrl(file) : undefined;
+    const selectedAsset =
+      modelLibraryAssets.find((asset) => asset.id === assetId) ||
+      (await assetService.getById(assetId).catch(() => null));
+    if (!selectedAsset) {
+      window.alert("Selected model not found.");
+      return;
+    }
+    let modelUrl = "";
+    try {
+      modelUrl = await downloadAssetAsDataUrl(selectedAsset);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to download model.";
+      window.alert(message);
+      return;
+    }
     const fallbackCenter = mapHandleRef.current?.getCenter() ?? { lat: mapCenter[1], lng: mapCenter[0] };
     const targetCoords = coords ?? fallbackCenter;
-    const modelInfo = createModelInfo(file, modelUrl, targetCoords);
+    const preferredName = selectedAsset.name?.trim() || selectedAsset.filename;
+    const modelInfo = createModelInfo(null, modelUrl, targetCoords, preferredName);
     const added =
       mapHandleRef.current?.addModelToLayer(layerId, {
         modelUrl,
@@ -747,6 +855,44 @@ function App() {
     setActiveLayerId(id);
   };
 
+  const buildSceneSnapshot = (): SceneFileV2 | null => {
+    const mapHandle = mapHandleRef.current;
+    if (!mapHandle) {
+      return null;
+    }
+    return {
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      payload: {
+        viewState: mapHandle.getViewState(),
+        weather,
+        daylight,
+        rainDensity,
+        snowDensity,
+        sunMinutes,
+        showShadowTime,
+        baseLayerLocked,
+        activeLayerId,
+        layerVisibility,
+        layerLightSettings,
+        waterLayerSettings,
+        customInstanceLayers,
+        customWaterLayers,
+        instanceLayerConfigs,
+        waterLayerConfigs,
+        editLayers: mapHandle.getEditLayerSnapshots(),
+      },
+    };
+  };
+
+  const isValidSceneFileV2 = (value: unknown): value is SceneFileV2 => {
+    if (!value || typeof value !== "object") {
+      return false;
+    }
+    const maybe = value as Partial<SceneFileV2>;
+    return maybe.version === 2 && !!maybe.payload;
+  };
+
   const restoreSceneFromFile = (scene: SceneFileV2) => {
     const saved = scene.payload;
     const mapHandle = mapHandleRef.current;
@@ -876,77 +1022,119 @@ function App() {
     setActiveLayerId(saved.activeLayerId || "models");
   };
 
-  const handleExportSceneJson = () => {
+  const parseSceneConfig = (scene: SceneDto): SceneFileV2 | null => {
+    const config = scene.configJson;
+    if (isValidSceneFileV2(config)) {
+      return config;
+    }
+    if (config && typeof config === "object" && "payload" in (config as Record<string, unknown>)) {
+      const wrapped = { version: 2, exportedAt: new Date().toISOString(), payload: (config as { payload: SceneFileV2["payload"] }).payload };
+      if (isValidSceneFileV2(wrapped)) {
+        return wrapped;
+      }
+    }
+    return null;
+  };
+
+  const loadScenesForModal = async () => {
+    setSceneModalLoading(true);
+    try {
+      const scenes = await sceneService.list();
+      setSceneModalScenes(scenes);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load scenes.";
+      window.alert(message);
+      setSceneModalScenes([]);
+    } finally {
+      setSceneModalLoading(false);
+    }
+  };
+
+  const handleOpenSaveSceneModal = async () => {
     if (typeof window === "undefined") {
       return;
     }
-    const mapHandle = mapHandleRef.current;
-    if (!mapHandle) {
+    const payload = buildSceneSnapshot();
+    if (!payload) {
       window.alert("Map is not ready yet.");
       return;
     }
-    const payload: SceneFileV2 = {
-      version: 2,
-      exportedAt: new Date().toISOString(),
-      payload: {
-        viewState: mapHandle.getViewState(),
-        weather,
-        daylight,
-        rainDensity,
-        snowDensity,
-        sunMinutes,
-        showShadowTime,
-        baseLayerLocked,
-        activeLayerId,
-        layerVisibility,
-        layerLightSettings,
-        waterLayerSettings,
-        customInstanceLayers,
-        customWaterLayers,
-        instanceLayerConfigs,
-        waterLayerConfigs,
-        editLayers: mapHandle.getEditLayerSnapshots(),
-      },
-    };
-    const text = JSON.stringify(payload, null, 2);
-    const blob = new Blob([text], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const defaultName = `scene-editor-v2-${stamp}.json`;
-    const enteredName = window.prompt("Enter export file name", defaultName);
-    if (enteredName === null) {
-      URL.revokeObjectURL(url);
-      return;
-    }
-    const trimmedName = enteredName.trim();
-    const safeBaseName = trimmedName.length > 0 ? trimmedName : defaultName;
-    const finalName = safeBaseName.toLowerCase().endsWith(".json") ? safeBaseName : `${safeBaseName}.json`;
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = finalName;
-    a.click();
-    URL.revokeObjectURL(url);
+    setSceneModalMode("save");
+    setSceneModalOpen(true);
+    await loadScenesForModal();
   };
 
-  const handleImportSceneFile = async (file: File) => {
-    let parsed: unknown;
+  const handleOpenLoadSceneModal = async () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    setSceneModalMode("load");
+    setSceneModalOpen(true);
+    await loadScenesForModal();
+  };
+
+  const handleConfirmSaveScene = async (sceneName: string) => {
+    const payload = buildSceneSnapshot();
+    if (!payload) {
+      window.alert("Map is not ready yet.");
+      return;
+    }
+    setSceneModalSubmitting(true);
     try {
-      parsed = JSON.parse(await file.text());
-    } catch {
-      window.alert("Invalid JSON file.");
-      return;
+      const existed = sceneModalScenes.find((scene) => scene.name.toLowerCase() === sceneName.toLowerCase()) ?? null;
+      if (existed) {
+        await sceneService.update(existed.id, { name: sceneName, configJson: payload });
+      } else {
+        await sceneService.create({ name: sceneName, configJson: payload });
+      }
+      await loadScenesForModal();
+      setSceneModalOpen(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save scene.";
+      window.alert(message);
+    } finally {
+      setSceneModalSubmitting(false);
     }
-    const scene = parsed as SceneFileV2;
-    if (!scene || scene.version !== 2 || !scene.payload) {
-      window.alert("Unsupported scene file version.");
-      return;
-    }
-    restoreSceneFromFile(scene);
-    window.alert("Scene imported successfully.");
   };
 
-  const handleOpenImportScene = () => {
-    importSceneInputRef.current?.click();
+  const handleConfirmLoadScene = async (sceneId: string) => {
+    setSceneModalSubmitting(true);
+    try {
+      const fullScene = await sceneService.getById(sceneId);
+      const parsed = parseSceneConfig(fullScene);
+      if (!parsed) {
+        window.alert("Unsupported scene config format.");
+        return;
+      }
+      restoreSceneFromFile(parsed);
+      setSceneModalOpen(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load scene.";
+      window.alert(message);
+    } finally {
+      setSceneModalSubmitting(false);
+    }
+  };
+
+  const handleDeleteScene = async (sceneId: string) => {
+    const target = sceneModalScenes.find((scene) => scene.id === sceneId) ?? null;
+    if (!target) {
+      return;
+    }
+    const ok = window.confirm(`Delete scene "${target.name}"?`);
+    if (!ok) {
+      return;
+    }
+    setSceneModalSubmitting(true);
+    try {
+      await sceneService.delete(sceneId);
+      await loadScenesForModal();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete scene.";
+      window.alert(message);
+    } finally {
+      setSceneModalSubmitting(false);
+    }
   };
 
   return (
@@ -1098,24 +1286,38 @@ function App() {
                 })
             : undefined
         }
-        onExportScene={isEditor ? handleExportSceneJson : undefined}
-        onImportScene={isEditor ? handleOpenImportScene : undefined}
+        onExportScene={isEditor ? handleOpenSaveSceneModal : undefined}
+        onImportScene={isEditor ? handleOpenLoadSceneModal : undefined}
+        onOpenModelManager={isEditor ? handleOpenModelLibrary : undefined}
       />
-      <input
-        ref={importSceneInputRef}
-        type="file"
-        accept="application/json,.json"
-        className="hidden"
-        onChange={(event) => {
-          const inputEl = event.currentTarget;
-          const file = event.target.files?.[0];
-          if (!file) {
-            return;
-          }
-          handleImportSceneFile(file).finally(() => {
-            inputEl.value = "";
-          });
-        }}
+      <SceneLibraryModal
+        open={sceneModalOpen}
+        mode={sceneModalMode}
+        scenes={sceneModalScenes}
+        loading={sceneModalLoading}
+        submitting={sceneModalSubmitting}
+        onClose={() => setSceneModalOpen(false)}
+        onRefresh={loadScenesForModal}
+        onConfirmSave={handleConfirmSaveScene}
+        onConfirmLoad={handleConfirmLoadScene}
+        onDeleteScene={handleDeleteScene}
+      />
+      <ModelLibraryModal
+        open={modelLibraryOpen}
+        assets={modelLibraryAssets}
+        loading={modelLibraryLoading}
+        deletingAssetId={modelLibraryDeletingId}
+        onClose={() => setModelLibraryOpen(false)}
+        onRefresh={loadModelLibraryAssets}
+        onOpenUpload={() => setUploadModelModalOpen(true)}
+        onDelete={handleDeleteModelAsset}
+        onCopyUrl={handleCopyModelUrl}
+      />
+      <UploadModelModal
+        open={uploadModelModalOpen}
+        uploading={modelLibraryUploading}
+        onCancel={() => setUploadModelModalOpen(false)}
+        onConfirm={handleUploadModel}
       />
       {isEditor ? (
         <>
@@ -1129,58 +1331,68 @@ function App() {
             showModelInput={false}
             showCoordsInput={false}
           />
-          <LayerNameModal
+          <AddModelToLayerModal
             open={modelModalOpen}
-            initialValue=""
             onCancel={() => {
               setModelModalOpen(false);
               setModelModalTargetId(null);
             }}
-            onConfirm={(name, file, coords) => {
+            onConfirm={(assetId, coords) => {
               if (!modelModalTargetId) {
                 setModelModalOpen(false);
                 return;
               }
-              handleConfirmAddModel(modelModalTargetId, name, file, coords);
+              handleConfirmAddModel(modelModalTargetId, assetId, coords);
             }}
             title={modelModalTitle}
-            subtitle="Choose a model to add to this layer."
-            confirmLabel="Add Model"
-            showNameInput={false}
-            showCoordsInput={true}
-            showModelInput={true}
+            assets={modelLibraryAssets}
+            loading={modelLibraryLoading}
+            onRefresh={loadModelLibraryAssets}
           />
           <InstanceLayerModal
             open={instanceLayerModalOpen}
             defaultTileUrl={defaultInstanceTileUrl}
             defaultSourceLayer={defaultInstanceSourceLayer}
-            defaultModelUrls={defaultInstanceModelUrls}
-            selectedFiles={instanceModelFiles}
-            onChangeFiles={setInstanceModelFiles}
+            modelAssets={modelLibraryAssets}
+            selectedModelAssetIds={instanceModelAssetIds}
+            onChangeSelectedModelAssetIds={setInstanceModelAssetIds}
             onCancel={() => setInstanceLayerModalOpen(false)}
             nameValue={instanceLayerName}
             onChangeName={setInstanceLayerName}
             onConfirm={async (data) => {
-              const fileUrls =
-                data.modelFiles.length > 0
-                  ? data.modelFiles.map((file) => URL.createObjectURL(file))
-                  : [];
-              const persistedModelUrls =
-                data.modelFiles.length > 0
-                  ? (await Promise.all(data.modelFiles.map((file) => readFileAsDataUrl(file)))).filter((url) => !!url)
-                  : data.modelUrls;
+              let runtimeModelUrls: string[] = [];
+              let persistedModelUrls: string[] = [];
+              const selectedAssets = modelLibraryAssets.filter((asset) => data.modelAssetIds.includes(asset.id));
+              const downloaded = await Promise.all(
+                selectedAssets.map(async (asset) => {
+                  try {
+                    return await downloadAssetAsDataUrl(asset);
+                  } catch {
+                    return "";
+                  }
+                })
+              );
+              runtimeModelUrls = downloaded.filter((url) => !!url);
+              persistedModelUrls = runtimeModelUrls;
+              if (runtimeModelUrls.length === 0) {
+                window.alert("No valid models selected.");
+                return;
+              }
               const layerId =
                 mapHandleRef.current?.addInstanceLayer({
                   tileUrl: data.tileUrl,
                   sourceLayer: data.sourceLayer,
-                  modelUrls: fileUrls.length > 0 ? fileUrls : data.modelUrls,
+                  modelUrls: runtimeModelUrls,
                 }) ?? null;
               if (!layerId) {
-                fileUrls.forEach((url) => URL.revokeObjectURL(url));
+                runtimeModelUrls
+                  .filter((url) => url.startsWith("blob:"))
+                  .forEach((url) => URL.revokeObjectURL(url));
                 return;
               }
-              if (fileUrls.length > 0) {
-                instanceBlobUrlsRef.current.set(layerId, fileUrls);
+              const blobUrls = runtimeModelUrls.filter((url) => url.startsWith("blob:"));
+              if (blobUrls.length > 0) {
+                instanceBlobUrlsRef.current.set(layerId, blobUrls);
               }
               setInstanceLayerConfigs((prev) => ({
                 ...prev,
@@ -1205,11 +1417,22 @@ function App() {
             onChangeName={setWaterLayerName}
             defaultTileUrl={defaultWaterTileUrl}
             defaultSourceLayer={defaultWaterSourceLayer}
-            selectedFile={waterTextureFile}
-            onChangeFile={setWaterTextureFile}
+            imageAssets={imageLibraryAssets}
+            selectedImageAssetId={waterTextureAssetId}
+            onChangeSelectedImageAssetId={setWaterTextureAssetId}
             onCancel={() => setWaterLayerModalOpen(false)}
-            onConfirm={(data) => {
-              const textureUrl = data.file ? URL.createObjectURL(data.file) : undefined;
+            onConfirm={async (data) => {
+              let textureUrl: string | undefined;
+              if (data.imageAssetId) {
+                const selectedImage = imageLibraryAssets.find((asset) => asset.id === data.imageAssetId) ?? null;
+                if (selectedImage) {
+                  try {
+                    textureUrl = await downloadAssetAsDataUrl(selectedImage);
+                  } catch {
+                    textureUrl = undefined;
+                  }
+                }
+              }
               const settings = { ...DEFAULT_WATER_SETTINGS };
               const layerId =
                 mapHandleRef.current?.addWaterLayer({
@@ -1219,12 +1442,12 @@ function App() {
                   settings,
                 }) ?? null;
               if (!layerId) {
-                if (textureUrl) {
+                if (textureUrl && textureUrl.startsWith("blob:")) {
                   URL.revokeObjectURL(textureUrl);
                 }
                 return;
               }
-              if (textureUrl) {
+              if (textureUrl && textureUrl.startsWith("blob:")) {
                 waterBlobUrlsRef.current.set(layerId, textureUrl);
               }
               setWaterLayerConfigs((prev) => ({
@@ -1324,8 +1547,8 @@ function App() {
       ) : null}
       <LoginModal
         open={loginModalOpen}
-        onLogin={(username, password) => {
-          const ok = login(username, password);
+        onLogin={async (username, password) => {
+          const ok = await login(username, password);
           if (ok) setLoginModalOpen(false);
           return ok;
         }}

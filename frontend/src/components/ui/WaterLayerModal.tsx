@@ -1,4 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
+import type { AssetDto } from "@/services/assetService";
+import MyWaterImagePicker from "@/components/ui/MyWaterImagePicker";
 
 type WaterLayerModalProps = {
   open: boolean;
@@ -6,11 +8,12 @@ type WaterLayerModalProps = {
   onChangeName: (value: string) => void;
   defaultTileUrl: string;
   defaultSourceLayer: string;
-  selectedFile: File | null;
-  onChangeFile: (file: File | null) => void;
+  imageAssets: AssetDto[];
+  selectedImageAssetId: string | null;
+  onChangeSelectedImageAssetId: (assetId: string | null) => void;
   onConfirm: (data: {
     name: string;
-    file: File | null;
+    imageAssetId: string | null;
     tileUrl: string;
     sourceLayer: string;
   }) => void;
@@ -23,8 +26,9 @@ export default function WaterLayerModal({
   onChangeName,
   defaultTileUrl,
   defaultSourceLayer,
-  selectedFile,
-  onChangeFile,
+  imageAssets,
+  selectedImageAssetId,
+  onChangeSelectedImageAssetId,
   onConfirm,
   onCancel,
 }: WaterLayerModalProps) {
@@ -38,7 +42,7 @@ export default function WaterLayerModal({
   const nameId = useId();
   const tileId = useId();
   const sourceId = useId();
-  const fileId = useId();
+  const imageLibraryId = useId();
 
   useEffect(() => {
     if (!open) {
@@ -106,7 +110,7 @@ export default function WaterLayerModal({
     }
     onConfirm({
       name: cleaned,
-      file: selectedFile,
+      imageAssetId: selectedImageAssetId,
       tileUrl: cleanedTileUrl,
       sourceLayer: cleanedSourceLayer || defaultSourceLayer,
     });
@@ -216,30 +220,16 @@ export default function WaterLayerModal({
           </div>
         ) : null}
 
-        <label
-          className="mt-3 block text-[11px] font-semibold text-(--section-heading)"
-          htmlFor={fileId}
-        >
-          Normal Texture
-        </label>
-        <input
-          id={fileId}
-          type="file"
-          accept="image/*"
-          onChange={(event) => onChangeFile(event.target.files?.[0] ?? null)}
-          className="mt-1 block w-full cursor-pointer text-[12px] text-(--text-muted) file:mr-3 file:h-9 file:rounded-md file:border file:border-(--btn-border) file:bg-(--btn-bg) file:px-3 file:text-[13px] file:font-semibold file:text-(--text) file:transition hover:file:border-(--btn-border-hover) hover:file:bg-(--btn-hover)"
-        />
-        <div className="mt-1 text-[11px] text-(--text-muted)">
-          {selectedFile ? `Selected: ${selectedFile.name}` : "No file selected. Default texture will be used."}
+        <div id={imageLibraryId} className="mt-3">
+          <MyWaterImagePicker
+            assets={imageAssets}
+            loading={false}
+            selectedId={selectedImageAssetId}
+            onChangeSelectedId={onChangeSelectedImageAssetId}
+          />
         </div>
-        <div className="mt-2 flex items-center justify-end">
-          <button
-            type="button"
-            onClick={() => onChangeFile(null)}
-            className="h-8 rounded-md border border-(--btn-border) bg-(--btn-bg) px-2.5 text-[12px] font-semibold text-(--text) transition hover:border-(--btn-border-hover) hover:bg-(--btn-hover)"
-          >
-            Clear
-          </button>
+        <div className="mt-1 text-[11px] text-(--text-muted)">
+          {selectedImageAssetId ? "A library image is selected." : "No library image selected. Default texture will be used."}
         </div>
 
         <div className="mt-4 flex items-center justify-end gap-2">

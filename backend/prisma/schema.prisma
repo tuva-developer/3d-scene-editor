@@ -7,8 +7,17 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum AssetKind {
+  MODEL
+  IMAGE
+  OTHER
+}
+
 model Asset {
   id         String   @id @default(cuid())
+  ownerId    String
+  kind       AssetKind @default(OTHER)
+  name       String?
   filename   String
   mimeType   String
   size       Int
@@ -16,15 +25,36 @@ model Asset {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   scenes Scene[]
+
+  @@index([ownerId])
+  @@index([ownerId, kind])
 }
 
 model Scene {
   id           String   @id @default(cuid())
+  ownerId      String
   name         String
   configJson   Json
   thumbnailId  String?
   thumbnail    Asset?   @relation(fields: [thumbnailId], references: [id])
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+}
+
+model User {
+  id         String   @id @default(cuid())
+  externalId String   @unique
+  username   String
+  password   String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  assets Asset[]
+  scenes Scene[]
 }

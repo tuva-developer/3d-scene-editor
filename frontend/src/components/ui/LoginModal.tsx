@@ -4,7 +4,7 @@ import { faUser, faLock, faRightToBracket } from "@fortawesome/free-solid-svg-ic
 
 interface Props {
   open: boolean;
-  onLogin: (username: string, password: string) => boolean;
+  onLogin: (username: string, password: string) => Promise<boolean> | boolean;
   onCancel: () => void;
 }
 
@@ -15,10 +15,10 @@ export default function LoginModal({ open, onLogin, onCancel }: Props) {
 
   if (!open) return null;
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
-    const ok = onLogin(username, password);
+    const ok = await onLogin(username, password);
     if (!ok) {
       setError("Invalid username or password.");
     } else {

@@ -165,9 +165,27 @@ export class OverlayLayer implements CustomLayerInterface {
     const bearing = decompose.bearing;
     const tileCoord = decompose.tileCoord;
     const height = decompose.height;
+    const userDataName =
+      object.userData && typeof object.userData.name === "string"
+        ? object.userData.name.trim()
+        : "";
+    const userDataInstanceId =
+      object.userData && typeof object.userData.instanceId === "string"
+        ? object.userData.instanceId.trim()
+        : "";
+    const userDataModelId =
+      object.userData && typeof object.userData.modelId === "string"
+        ? object.userData.modelId.trim()
+        : "";
+    const objectName = object.name?.trim() ?? "";
+    const safeName =
+      userDataName ||
+      (objectName.startsWith("data:") ? "Model" : objectName) ||
+      "Model";
+    const safeId = userDataInstanceId || userDataModelId || String(object.id);
     this.hoverDiv.innerText =
-      `Name: ${object.name}\n` +
-      `Id: ${object.id}\n` +
+      `Name: ${safeName}\n` +
+      `Id: ${safeId}\n` +
       `Lat: ${decompose.latlon.lat}\n` +
       `Lon: ${decompose.latlon.lon}\n` +
       `Tile Coord: ${tileCoord.x}, ${tileCoord.y}\n` +

@@ -219,6 +219,19 @@ export class EditLayer implements CustomLayerInterface {
     if (!rootObj) {
       return;
     }
+    const fallbackNameFromId = (() => {
+      if (!id) {
+        return "Model";
+      }
+      if (id.startsWith("data:")) {
+        return "Model";
+      }
+      const trimmed = id.split("?")[0];
+      const parts = trimmed.split("/");
+      return parts[parts.length - 1] || "Model";
+    })();
+    const displayName = options?.name?.trim() || fallbackNameFromId;
+
     const center = this.map.getCenter();
     const lat = coords?.lat ?? center.lat;
     const lng = coords?.lng ?? center.lng;
@@ -238,7 +251,7 @@ export class EditLayer implements CustomLayerInterface {
     const scaleUnit = initialState?.scaleUnit ?? getMetersPerExtentUnit(lat, this.editorLevel);
     const bearing = 0;
     const objectScale = defaultScale;
-    cloneObj3d.name = id;
+    cloneObj3d.name = displayName;
     if (initialState) {
       cloneObj3d.position.set(
         initialState.transform.position[0],
@@ -289,7 +302,7 @@ export class EditLayer implements CustomLayerInterface {
     cloneObj3d.userData = {
       instanceId: options?.instanceId,
       modelId: id,
-      name: options?.name,
+      name: displayName,
       coords: initialState?.coords ?? (coords ? { lat, lng } : null),
       tile: initialState?.tile ?? { z: this.editorLevel, x: local.tileX, y: local.tileY },
       isModelRoot: true,
@@ -299,7 +312,7 @@ export class EditLayer implements CustomLayerInterface {
 
     tileData.objects.push({
       id: options?.instanceId ?? "",
-      name: options?.name ?? "",
+      name: displayName,
       object3d: cloneObj3d,
       textureUrl: "",
       textureName: "",

@@ -1,4 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
+import type { AssetDto } from "@/services/assetService";
+import MyModelPicker from "@/components/ui/MyModelPicker";
 
 type InstanceLayerModalProps = {
   open: boolean;
@@ -6,15 +8,14 @@ type InstanceLayerModalProps = {
   onChangeName: (value: string) => void;
   defaultTileUrl: string;
   defaultSourceLayer: string;
-  defaultModelUrls: string[];
-  selectedFiles: File[];
-  onChangeFiles: (files: File[]) => void;
+  modelAssets: AssetDto[];
+  selectedModelAssetIds: string[];
+  onChangeSelectedModelAssetIds: (ids: string[]) => void;
   onConfirm: (data: {
     name: string;
     tileUrl: string;
     sourceLayer: string;
-    modelUrls: string[];
-    modelFiles: File[];
+    modelAssetIds: string[];
   }) => void;
   onCancel: () => void;
 };
@@ -25,9 +26,9 @@ export default function InstanceLayerModal({
   onChangeName,
   defaultTileUrl,
   defaultSourceLayer,
-  defaultModelUrls,
-  selectedFiles,
-  onChangeFiles,
+  modelAssets,
+  selectedModelAssetIds,
+  onChangeSelectedModelAssetIds,
   onConfirm,
   onCancel,
 }: InstanceLayerModalProps) {
@@ -38,7 +39,7 @@ export default function InstanceLayerModal({
   const nameId = useId();
   const tileId = useId();
   const sourceId = useId();
-  const modelsId = useId();
+  const modelLibraryId = useId();
 
   useEffect(() => {
     if (!open) {
@@ -46,7 +47,7 @@ export default function InstanceLayerModal({
     }
     setTileUrl(defaultTileUrl);
     setSourceLayer(defaultSourceLayer);
-  }, [defaultModelUrls, defaultSourceLayer, defaultTileUrl, open]);
+  }, [defaultSourceLayer, defaultTileUrl, open]);
 
   useEffect(() => {
     if (!open) {
@@ -79,16 +80,15 @@ export default function InstanceLayerModal({
   const handleConfirm = () => {
     const cleanedTileUrl = tileUrl.trim();
     const cleanedSourceLayer = sourceLayer.trim();
-    const modelUrls = selectedFiles.length > 0 ? [] : defaultModelUrls;
-    if (!cleanedTileUrl || (modelUrls.length === 0 && selectedFiles.length === 0)) {
+    const hasLibraryModels = selectedModelAssetIds.length > 0;
+    if (!cleanedTileUrl || !hasLibraryModels) {
       return;
     }
     onConfirm({
       name: nameValue.trim(),
       tileUrl: cleanedTileUrl,
       sourceLayer: cleanedSourceLayer || defaultSourceLayer,
-      modelUrls,
-      modelFiles: selectedFiles,
+      modelAssetIds: selectedModelAssetIds,
     });
   };
 
@@ -173,37 +173,19 @@ export default function InstanceLayerModal({
           placeholder="trees"
         />
 
-        <label
-          className="mt-3 block text-[11px] font-semibold text-(--section-heading)"
-          htmlFor={modelsId}
-        >
-          Model files (.glb)
-        </label>
-        <input
-          id={modelsId}
-          type="file"
-          accept=".glb,model/gltf-binary"
-          multiple
-          onChange={(event) =>
-            onChangeFiles(Array.from(event.target.files ?? []))
-          }
-          className="mt-1 block w-full cursor-pointer text-[12px] text-(--text-muted) file:mr-3 file:h-9 file:rounded-md file:border file:border-(--btn-border) file:bg-(--btn-bg) file:px-3 file:text-[13px] file:font-semibold file:text-(--text) file:transition hover:file:border-(--btn-border-hover) hover:file:bg-(--btn-hover)"
-        />
-        <div className="mt-1 text-[11px] text-(--text-muted)">
-          {selectedFiles.length > 0
-            ? `Selected ${selectedFiles.length} file(s): ${selectedFiles
-                .map((file) => file.name)
-                .join(", ")}`
-            : "No file selected. Defaults will be used."}
+        <div id={modelLibraryId} className="mt-3">
+          <MyModelPicker
+            assets={modelAssets}
+            loading={false}
+            selectedIds={selectedModelAssetIds}
+            onChangeSelectedIds={onChangeSelectedModelAssetIds}
+            onClear={() => onChangeSelectedModelAssetIds([])}
+          />
         </div>
-        <div className="mt-2 flex items-center justify-end">
-          <button
-            type="button"
-            onClick={() => onChangeFiles([])}
-            className="h-8 rounded-md border border-(--btn-border) bg-(--btn-bg) px-2.5 text-[12px] font-semibold text-(--text) transition hover:border-(--btn-border-hover) hover:bg-(--btn-hover)"
-          >
-            Clear
-          </button>
+        <div className="mt-1 text-[11px] text-(--text-muted)">
+          {selectedModelAssetIds.length > 0
+            ? `${selectedModelAssetIds.length} model(s) selected from library.`
+            : "Select model(s) from your library."}
         </div>
 
         <div className="mt-4 flex items-center justify-end gap-2">

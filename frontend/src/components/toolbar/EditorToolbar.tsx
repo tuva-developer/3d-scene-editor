@@ -17,7 +17,7 @@ import {
   faTableColumns,
   faFloppyDisk,
   faFolderOpen,
-  faXmark,
+  faCubes,
 } from "@fortawesome/free-solid-svg-icons";
 import type { ThemeMode } from "@/types/common";
 
@@ -75,6 +75,7 @@ interface Props {
   onToggleSidePanel?: () => void;
   onExportScene?: () => void;
   onImportScene?: () => void;
+  onOpenModelManager?: () => void;
 }
 
 function clampTextValue(value: string): string {
@@ -107,6 +108,7 @@ export const EditorToolbar = ({
   onToggleSidePanel,
   onExportScene,
   onImportScene,
+  onOpenModelManager,
 }: Props) => {
   const [weatherMenuOpen, setWeatherMenuOpen] = useState(false);
   const weatherMenuRef = useRef<HTMLDivElement | null>(null);
@@ -564,8 +566,8 @@ export const EditorToolbar = ({
               <button
                 className={`${buttonBaseClassName} ${buttonIconClassName}`}
                 onClick={onImportScene}
-                title="Import Scene"
-                aria-label="Import Scene"
+                title="Load Scene"
+                aria-label="Load Scene"
                 type="button"
               >
                 <FontAwesomeIcon icon={faFolderOpen} />
@@ -575,13 +577,28 @@ export const EditorToolbar = ({
               <button
                 className={`${buttonBaseClassName} ${buttonIconClassName}`}
                 onClick={onExportScene}
-                title="Export Scene JSON"
-                aria-label="Export Scene JSON"
+                title="Save Scene"
+                aria-label="Save Scene"
                 type="button"
               >
                 <FontAwesomeIcon icon={faFloppyDisk} />
               </button>
             ) : null}
+          </div>
+        ) : null}
+
+        {isEditor && onOpenModelManager ? (
+          <div className={groupClassName}>
+            <span className={labelClassName}>Models</span>
+            <button
+              className={`${buttonBaseClassName} ${buttonIconClassName}`}
+              onClick={onOpenModelManager}
+              title="Manage Models"
+              aria-label="Manage Models"
+              type="button"
+            >
+              <FontAwesomeIcon icon={faCubes} />
+            </button>
           </div>
         ) : null}
 

@@ -18,6 +18,10 @@ export default defineConfig({
         secure: true,
         rewrite: (path) => path.replace(/^\/api\/vbd/, "/V2/service/PartnerPortalService.svc/rest"),
       },
+      "/api": {
+        target: "http://localhost:4000",
+        changeOrigin: true,
+      },
     },
   },
 });
