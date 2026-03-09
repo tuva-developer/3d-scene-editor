@@ -15,7 +15,6 @@
     "@fortawesome/react-fontawesome": "^3.2.0",
     "@mapbox/vector-tile": "^2.0.4",
     "@turf/turf": "^7.3.3",
-    "3dsceneeditor-workspace": "file:..",
     "depcheck": "^1.4.7",
     "earcut": "^3.0.2",
     "lru-cache": "^11.2.4",
