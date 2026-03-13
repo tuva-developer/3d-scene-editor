@@ -14,6 +14,9 @@ import { WaterLayer } from "@/components/map/water/WaterLayer";
 import { normalizeWaterSettings, type WaterSettings } from "@/components/map/water/WaterMaterial";
 import { InstanceLayer } from "@/components/map/instance/InstanceLayer";
 import { latlonToLocal } from "@/components/map/data/convert/coords";
+import { ShadowOrchestrator } from "@/components/map/shadow/ShadowOrchestrator";
+import { ReflectionOrchestrator } from "@/components/map/water/ReflectionOrchestrator";
+import { getSharedShadowPass } from "@/components/map/shadow/ShadowMapPass";
 
 type WeatherMode = "sun" | "rain" | "snow";
 type DaylightMode = "morning" | "noon" | "evening" | "night";
@@ -162,7 +165,7 @@ const daylightPresets: Record<
   }
 > = {
   morning: {
-    tint: { color: "#f3c07d", opacity: 0.75, blend: "soft-light" },
+    tint: { color: "#f3c07d", opacity: 0.25, blend: "soft-light" },
     light: {
       directional: { intensity: 5.6, color: "#ffffff" },
       hemisphere: { intensity: 2.9, skyColor: "#ffffff", groundColor: "#ffffff" },
@@ -178,7 +181,7 @@ const daylightPresets: Record<
     },
   },
   evening: {
-    tint: { color: "#f08b4b", opacity: 0.75, blend: "soft-light" },
+    tint: { color: "#f08b4b", opacity: 0.25, blend: "soft-light" },
     light: {
       directional: { intensity: 4.2, color: "#ffffff" },
       hemisphere: { intensity: 2.1, skyColor: "#ffffff", groundColor: "#ffffff" },
@@ -186,7 +189,7 @@ const daylightPresets: Record<
     },
   },
   night: {
-    tint: { color: "#222831", opacity: 0.6, blend: "multiply" },
+    tint: { color: "#222831", opacity: 0.7, blend: "multiply" },
     light: {
       directional: { intensity: 3.1, color: "#ffffff" },
       hemisphere: { intensity: 1.6, skyColor: "#ffffff", groundColor: "#ffffff" },
@@ -409,7 +412,7 @@ const WeatherOverlay = ({
 const MapView = forwardRef<MapViewHandle, MapViewProps>(
   (
     {
-      center = [106.72135300000002, 10.796071],
+      center = [106.72917030411851, 10.797981541869406],
       zoom = 12,
       styleUrl,
       activeLayerId,
@@ -432,6 +435,8 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
     const overlayLayerRef = useRef<OverlayLayer | null>(null);
     const outlineLayerRef = useRef<OutlineLayer | null>(null);
     const modelLayerRef = useRef<ModelLayer | null>(null);
+    const shadowOrchestratorRef = useRef<ShadowOrchestrator | null>(null);
+    const reflectionOrchestratorRef = useRef<ReflectionOrchestrator | null>(null);
     const customWaterLayerRef = useRef<Map<string, WaterLayer>>(new Map());
     const customWaterSourceRef = useRef<Map<string, CustomVectorSource>>(new Map());
     const customWaterConfigRef = useRef<
@@ -527,6 +532,13 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
       }
       const centerPoint = mainMap.getCenter();
       const sunPos = getSunPositionAt(centerPoint.lat, centerPoint.lng, date);
+      getSharedShadowPass(8192).setSunOptions({
+        shadow: true,
+        altitude: sunPos.altitude,
+        azimuth: sunPos.azimuth,
+        lat: centerPoint.lat,
+        lon: centerPoint.lng,
+      });
       modelLayerRef.current?.setSunPos(sunPos.altitude, sunPos.azimuth);
       instanceLayerRef.current.forEach((layer) => {
         layer.setSunPos(sunPos.altitude, sunPos.azimuth);
@@ -596,6 +608,8 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
         overlayLayerRef.current?.unselect();
         outlineLayerRef.current?.unselect();
         removeLayerIfExists(mainMap, "models");
+        removeLayerIfExists(mainMap, "reflection-orchestrator");
+        removeLayerIfExists(mainMap, "shadow-orchestrator");
         for (const [layerId] of instanceLayerConfigRef.current) {
           removeLayerIfExists(mainMap, layerId);
         }
@@ -615,6 +629,8 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
             mainMap.removeLayer(entry.layer.id);
           }
         }
+        shadowOrchestratorRef.current = null;
+        reflectionOrchestratorRef.current = null;
       };
 
       const getLayerOptions = (): LayerOption[] => {
@@ -659,13 +675,25 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
           altitude: sunPos.altitude,
           azimuth: sunPos.azimuth,
         };
+        getSharedShadowPass(8192).setSunOptions({
+          ...sunOptions,
+          lat: centerPoint.lat,
+          lon: centerPoint.lng,
+        });
+
+        const shadowOrchestrator = new ShadowOrchestrator("shadow-orchestrator");
+        const reflectionOrchestrator = new ReflectionOrchestrator("reflection-orchestrator");
+        shadowOrchestratorRef.current = shadowOrchestrator;
+        reflectionOrchestratorRef.current = reflectionOrchestrator;
+        mainMap.addLayer(shadowOrchestrator);
+        mainMap.addLayer(reflectionOrchestrator);
 
         const modelLayer = new ModelLayer({
           id: "models",
           vectorSourceUrl,
           sourceLayer,
           rootUrl: rootModelUrl,
-          minZoom: 16,
+          minZoom: 15,
           maxZoom: 19,
           sun: sunOptions,
           onPick: (info) => {
@@ -686,8 +714,11 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
           },
         });
 
+        (modelLayer as unknown as { useOrchestrator?: boolean }).useOrchestrator = true;
         modelLayer.setSunPos(sunPos.altitude, sunPos.azimuth);
         modelLayerRef.current = modelLayer;
+        shadowOrchestrator.register(modelLayer);
+        reflectionOrchestrator.register(modelLayer);
         mainMap.addLayer(modelLayer);
 
         for (const [layerId, config] of customWaterConfigRef.current) {
@@ -737,8 +768,11 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
             sun: sunOptions,
             objectUrl: config.modelUrls,
           });
+          (instanceLayer as unknown as { useOrchestrator?: boolean }).useOrchestrator = true;
           instanceLayer.setVectorSource(instanceSource);
           instanceLayerRef.current.set(layerId, instanceLayer);
+          shadowOrchestrator.register(instanceLayer);
+          reflectionOrchestrator.register(instanceLayer);
           mainMap.addLayer(instanceLayer);
         }
 
@@ -1014,6 +1048,8 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
           return;
         }
         if (instanceLayerRef.current.has(id)) {
+          shadowOrchestratorRef.current?.unregister(id);
+          reflectionOrchestratorRef.current?.unregister(id);
           if (map.current?.getLayer(id)) {
             map.current.removeLayer(id);
           }
@@ -1261,8 +1297,11 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
           sun: sunOptions,
           objectUrl: options.modelUrls,
         });
+        (instanceLayer as unknown as { useOrchestrator?: boolean }).useOrchestrator = true;
         instanceLayer.setVectorSource(instanceSource);
         instanceLayerRef.current.set(layerId, instanceLayer);
+        shadowOrchestratorRef.current?.register(instanceLayer);
+        reflectionOrchestratorRef.current?.register(instanceLayer);
         instanceLayerConfigRef.current.set(layerId, {
           tileUrl: options.tileUrl,
           sourceLayer: options.sourceLayer,

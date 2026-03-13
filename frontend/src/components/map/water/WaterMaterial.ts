@@ -280,3 +280,63 @@ export function createWaterMaterial(opts: WaterOpts): THREE.ShaderMaterial {
   applyWaterSettings(waterMat, initialSettings);
   return waterMat;
 }
+
+export class WaterReflectionMaterial extends THREE.ShaderMaterial {
+  constructor(reflectionTexture: THREE.Texture | null = null) {
+    super({
+      name: "WaterReflectionMaterial",
+      uniforms: {
+        reflectionTex: { value: reflectionTexture },
+        hasReflection: { value: reflectionTexture !== null },
+        waterColor: { value: new THREE.Color(0x2a6ea8) },
+        opacity: { value: 0.9 },
+      },
+      vertexShader: `
+        varying vec4 vClip;
+
+        void main() {
+          vClip = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          gl_Position = vClip;
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D reflectionTex;
+        uniform bool hasReflection;
+        uniform vec3 waterColor;
+        uniform float opacity;
+
+        varying vec4 vClip;
+
+        void main() {
+          vec2 uv = vClip.xy / vClip.w;
+          uv = uv * 0.5 + 0.5;
+          if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+            discard;
+          }
+          vec3 reflection = vec3(0.0);
+          if (hasReflection) {
+            reflection = texture2D(reflectionTex, uv).rgb;
+          }
+          vec3 finalColor = mix(waterColor, reflection, 0.7);
+          gl_FragColor = vec4(finalColor, opacity);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.FrontSide,
+    });
+  }
+
+  updateReflectionTexture(texture: THREE.Texture): void {
+    this.uniforms.reflectionTex.value = texture;
+    this.uniforms.hasReflection.value = true;
+  }
+
+  setWaterColor(color: THREE.Color | string | number): void {
+    (this.uniforms.waterColor.value as THREE.Color).set(color as THREE.ColorRepresentation);
+  }
+
+  setOpacity(opacity: number): void {
+    this.uniforms.opacity.value = opacity;
+  }
+}
