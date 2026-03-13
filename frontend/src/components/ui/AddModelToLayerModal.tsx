@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import type { AssetDto } from "@/services/assetService";
-import MyModelPicker from "@/components/ui/MyModelPicker";
+import MyAssetPicker from "@/components/ui/MyAssetPicker";
 
 type Props = {
   open: boolean;
@@ -56,7 +56,7 @@ export default function AddModelToLayerModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative z-1 max-h-[92vh] w-[min(94vw,760px)] overflow-y-auto rounded-xl border border-(--panel-border) bg-(--panel-bg) p-4 text-(--text) shadow-(--panel-shadow)"
+        className="relative z-1 max-h-[92vh] w-[min(94vw,760px)] overflow-hidden rounded-xl border border-(--panel-border) bg-(--panel-bg) p-4 text-(--text) shadow-(--panel-shadow)"
       >
         <div id={titleId} className="text-[15px] font-semibold">
           {title}
@@ -67,13 +67,15 @@ export default function AddModelToLayerModal({
 
         <div className="mt-3 rounded-lg border border-(--panel-border) bg-(--panel-section-bg)">
           <div className="px-3 py-2">
-            <MyModelPicker
+            <MyAssetPicker
               assets={assets}
               loading={loading}
               selectedIds={selectedAssetId ? [selectedAssetId] : []}
               onChangeSelectedIds={(ids) => setSelectedAssetId(ids[0] ?? "")}
               onRefresh={onRefresh}
               multi={false}
+              gridCols={4}
+              listMaxHeightClass="max-h-[40vh]"
             />
           </div>
         </div>

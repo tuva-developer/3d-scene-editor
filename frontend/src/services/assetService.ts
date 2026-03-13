@@ -13,6 +13,7 @@ export type AssetDto = {
   updatedAt: string;
   isPublic?: boolean;
   url?: string;
+  thumbnailUrl?: string | null;
 };
 
 export type UploadAssetResponse = {
@@ -31,6 +32,10 @@ export type DeleteAssetResponse = {
   id: string;
   deleted: boolean;
   remote: unknown;
+};
+
+export type UpdateAssetPayload = {
+  name: string;
 };
 
 export type ListAssetsResponse = {
@@ -75,6 +80,22 @@ export const assetService = {
     const query = key?.trim() ? `?key=${encodeURIComponent(key.trim())}` : "";
     return apiRequest<DeleteAssetResponse>(`/assets/${assetId}${query}`, {
       method: "DELETE",
+    });
+  },
+
+  update(assetId: string, payload: UpdateAssetPayload) {
+    return apiRequest<AssetDto>(`/assets/${assetId}`, {
+      method: "PUT",
+      body: payload,
+    });
+  },
+
+  uploadThumbnail(assetId: string, thumbnail: Blob) {
+    const formData = new FormData();
+    formData.append("thumbnail", thumbnail, `${assetId}.webp`);
+    return apiRequest<{ id: string; thumbnailUrl: string }>(`/assets/${assetId}/thumbnail`, {
+      method: "POST",
+      body: formData,
     });
   },
 };

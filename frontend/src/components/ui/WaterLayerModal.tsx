@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { AssetDto } from "@/services/assetService";
-import MyImagePicker from "@/components/ui/MyImagePicker";
+import MyAssetPicker from "@/components/ui/MyAssetPicker";
 
 type WaterLayerModalProps = {
   open: boolean;
@@ -127,7 +127,7 @@ export default function WaterLayerModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative z-1 max-h-[92vh] w-[min(94vw,820px)] overflow-y-auto rounded-xl border border-(--panel-border) bg-(--panel-bg) p-4 text-(--text) shadow-(--panel-shadow)"
+        className="relative z-1 max-h-[92vh] w-[min(94vw,820px)] overflow-hidden rounded-xl border border-(--panel-border) bg-(--panel-bg) p-4 text-(--text) shadow-(--panel-shadow)"
       >
         <div id={titleId} className="text-[15px] font-semibold">
           Add Water Layer
@@ -221,7 +221,7 @@ export default function WaterLayerModal({
         ) : null}
 
         <div id={imageLibraryId} className="mt-3">
-          <MyImagePicker
+          <MyAssetPicker
             assets={imageAssets}
             loading={false}
             selectedIds={selectedImageAssetId ? [selectedImageAssetId] : []}
@@ -230,8 +230,8 @@ export default function WaterLayerModal({
             title="Texture from your library"
             emptyText="No images in your library."
             searchPlaceholder="Search images..."
-            gridCols={3}
-            listMaxHeightClass="max-h-[56vh]"
+            gridCols={6}
+            listMaxHeightClass="max-h-[35vh]"
           />
         </div>
         <div className="mt-1 text-[11px] text-(--text-muted)">

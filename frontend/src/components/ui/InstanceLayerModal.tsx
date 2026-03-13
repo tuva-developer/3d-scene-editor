@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { AssetDto } from "@/services/assetService";
-import MyModelPicker from "@/components/ui/MyModelPicker";
+import MyAssetPicker from "@/components/ui/MyAssetPicker";
 
 type InstanceLayerModalProps = {
   open: boolean;
@@ -103,7 +103,7 @@ export default function InstanceLayerModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative z-1 max-h-[92vh] w-[min(94vw,840px)] overflow-y-auto rounded-xl border border-(--panel-border) bg-(--panel-bg) p-4 text-(--text) shadow-(--panel-shadow)"
+        className="relative z-1 max-h-[92vh] w-[min(94vw,840px)] overflow-hidden rounded-xl border border-(--panel-border) bg-(--panel-bg) p-4 text-(--text) shadow-(--panel-shadow)"
       >
         <div id={titleId} className="text-[15px] font-semibold">
           Add Custom Instance Layer
@@ -174,12 +174,14 @@ export default function InstanceLayerModal({
         />
 
         <div id={modelLibraryId} className="mt-3">
-          <MyModelPicker
+          <MyAssetPicker
             assets={modelAssets}
             loading={false}
             selectedIds={selectedModelAssetIds}
             onChangeSelectedIds={onChangeSelectedModelAssetIds}
             onClear={() => onChangeSelectedModelAssetIds([])}
+            gridCols={6}
+            listMaxHeightClass="max-h-[36vh]"
           />
         </div>
         <div className="mt-1 text-[11px] text-(--text-muted)">

@@ -27,9 +27,22 @@ model Asset {
 
   owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   scenes Scene[]
+  thumbnail AssetThumbnail?
 
   @@index([ownerId])
   @@index([ownerId, kind])
+}
+
+model AssetThumbnail {
+  id         String   @id @default(cuid())
+  assetId    String   @unique
+  storagePath String
+  mimeType   String
+  size       Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
 }
 
 model Scene {

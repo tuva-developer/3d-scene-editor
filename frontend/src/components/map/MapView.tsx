@@ -7,7 +7,7 @@ import OutlineLayer from "@/components/map/layers/OutlineLayer";
 import { EditLayer, type EditLayerObjectSnapshot } from "@/components/map/layers/EditLayer";
 import type { LayerOption, TransformMode, TransformValues } from "@/types/common";
 import { decomposeObject, loadModelFromGlb, type LightGroupOption } from "@/components/map/data/models/objModel";
-import { getSunPosition, getSunPositionAt } from "@/components/map/shadow/ShadowHelper";
+import { getSunPositionAt } from "@/components/map/shadow/ShadowHelper";
 import { MathUtils } from "three";
 import { CustomVectorSource } from "@/components/map/source/CustomVectorSource";
 import { WaterLayer } from "@/components/map/water/WaterLayer";
@@ -30,6 +30,7 @@ interface MapViewProps {
   daylight?: DaylightMode;
   rainDensity?: number;
   snowDensity?: number;
+  sunTime?: Date;
   mapControlsRef?: React.RefObject<HTMLDivElement | null>;
   onSelectionChange?: (selected: boolean) => void;
   onSelectionElevationChange?: (elevation: number | null) => void;
@@ -417,6 +418,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
       daylight = "noon",
       rainDensity = 1,
       snowDensity = 1,
+      sunTime,
       mapControlsRef,
       onSelectionChange,
       onSelectionElevationChange,
@@ -516,6 +518,31 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
       });
       map.current?.triggerRepaint();
     };
+
+    const applySunTimeToLayers = (date: Date) => {
+      sunTimeRef.current = date;
+      const mainMap = map.current;
+      if (!mainMap) {
+        return;
+      }
+      const centerPoint = mainMap.getCenter();
+      const sunPos = getSunPositionAt(centerPoint.lat, centerPoint.lng, date);
+      modelLayerRef.current?.setSunPos(sunPos.altitude, sunPos.azimuth);
+      instanceLayerRef.current.forEach((layer) => {
+        layer.setSunPos(sunPos.altitude, sunPos.azimuth);
+      });
+      editLayersRef.current.forEach((entry) => {
+        entry.layer.setSunPos(sunPos.altitude, sunPos.azimuth);
+      });
+      mainMap.triggerRepaint();
+    };
+
+    useEffect(() => {
+      if (!sunTime) {
+        return;
+      }
+      applySunTimeToLayers(sunTime);
+    }, [sunTime]);
 
     useEffect(() => {
       if (!mapContainer.current) return;
@@ -624,7 +651,9 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
         const vectorSourceUrl = (import.meta.env.VITE_MAP4D_TILE_URL as string | undefined)?.trim() ?? "";
         const rootModelUrl = (import.meta.env.VITE_ROOT_MODEL_URL as string | undefined)?.trim() ?? "";
         const sourceLayer = "map4d_3dmodels";
-        const sunPos = getSunPosition(centerPoint.lat, centerPoint.lng);
+        const initialSunTime = sunTimeRef.current ?? sunTime ?? new Date();
+        sunTimeRef.current = initialSunTime;
+        const sunPos = getSunPositionAt(centerPoint.lat, centerPoint.lng, initialSunTime);
         const sunOptions = {
           shadow: true,
           altitude: sunPos.altitude,
@@ -1162,21 +1191,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(
         return entry.layer.cloneObjectByInstanceId(instanceId, newInstanceId);
       },
       setSunTime(date) {
-        const mainMap = map.current;
-        if (!mainMap) {
-          return;
-        }
-        sunTimeRef.current = date;
-        const centerPoint = mainMap.getCenter();
-        const sunPos = getSunPositionAt(centerPoint.lat, centerPoint.lng, date);
-        modelLayerRef.current?.setSunPos(sunPos.altitude, sunPos.azimuth);
-        instanceLayerRef.current.forEach((layer) => {
-          layer.setSunPos(sunPos.altitude, sunPos.azimuth);
-        });
-        editLayersRef.current.forEach((entry) => {
-          entry.layer.setSunPos(sunPos.altitude, sunPos.azimuth);
-        });
-        mainMap.triggerRepaint();
+        applySunTimeToLayers(date);
       },
       getViewState() {
         const mainMap = map.current;

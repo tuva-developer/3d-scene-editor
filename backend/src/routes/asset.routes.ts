@@ -2,11 +2,14 @@ import { NextFunction, Request, Response, Router } from "express";
 import multer from "multer";
 import path from "node:path";
 import fs from "node:fs";
+import { randomUUID } from "node:crypto";
 import axios from "axios";
 import FormData from "form-data";
 import { prisma } from "../lib/prisma.js";
 
 const uploadDir = process.env.UPLOAD_DIR ?? "./uploads";
+const thumbnailDir = path.resolve(uploadDir, ".thumbnails");
+fs.mkdirSync(path.resolve(thumbnailDir), { recursive: true });
 const remoteServiceBaseUrl =
   process.env.FILE_SERVICE_URL?.trim() ||
   process.env.FILE_SERVICE_UPLOAD_URL?.trim() ||
@@ -31,6 +34,12 @@ const publicModelStorageKey = normalizeStorageKey(
 );
 const publicImageStorageKey = normalizeStorageKey(
   process.env.FILE_SERVICE_PUBLIC_IMAGE_KEY?.trim() || "/public/images",
+);
+const publicThumbnailStorageKey = normalizeStorageKey(
+  process.env.FILE_SERVICE_PUBLIC_THUMBNAIL_KEY?.trim() || "/public/thumbnails",
+);
+const thumbnailStorageKey = normalizeStorageKey(
+  process.env.FILE_SERVICE_THUMBNAIL_KEY?.trim() || "/thumbnails",
 );
 const defaultStorageKey = normalizeStorageKey(
   process.env.FILE_SERVICE_DEFAULT_KEY?.trim() || modelStorageKey,
@@ -237,6 +246,11 @@ function buildPublicAssetPath(key: string, fileName: string): string {
   return `${key.replace(/\/+$/, "")}/${path.posix.basename(fileName)}`;
 }
 
+function toThumbnailFileName(fileName: string): string {
+  const base = fileName.replace(/\.[^/.]+$/, "");
+  return `${base}.webp`;
+}
+
 function toPublicAssetDto(asset: {
   id: string;
   kind: "MODEL" | "IMAGE" | "OTHER";
@@ -249,6 +263,7 @@ function toPublicAssetDto(asset: {
   updatedAt: Date;
 }) {
   const key = asset.kind === "IMAGE" ? publicImageStorageKey : publicModelStorageKey;
+  const thumbnailFileName = toThumbnailFileName(asset.filename);
   return {
     id: asset.id,
     ownerId: "public",
@@ -262,6 +277,10 @@ function toPublicAssetDto(asset: {
     updatedAt: asset.updatedAt,
     isPublic: true,
     url: `/api/assets/public/content?fileName=${encodeURIComponent(asset.filename)}&key=${encodeURIComponent(key)}`,
+    thumbnailUrl:
+      asset.kind === "MODEL"
+        ? `/api/assets/public/content?fileName=${encodeURIComponent(thumbnailFileName)}&key=${encodeURIComponent(publicThumbnailStorageKey)}`
+        : null,
   };
 }
 
@@ -271,6 +290,63 @@ const memoryUpload = multer({
 });
 
 export const assetRouter = Router();
+
+function resolveThumbnailPath(assetId: string): string {
+  return path.resolve(thumbnailDir, `${assetId}.webp`);
+}
+
+function resolveLocalStoragePath(storagePath: string): string | null {
+  if (!storagePath.startsWith("local:")) {
+    return null;
+  }
+  const relativePath = storagePath.slice("local:".length).replace(/^\/+/, "");
+  return path.resolve(uploadDir, relativePath);
+}
+
+type AssetThumbnailRow = {
+  id: string;
+  assetId: string;
+  storagePath: string;
+  mimeType: string;
+  size: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+async function getAssetThumbnailByAssetId(assetId: string): Promise<AssetThumbnailRow | null> {
+  const rows = await prisma.$queryRaw<AssetThumbnailRow[]>`
+    SELECT "id", "assetId", "storagePath", "mimeType", "size", "createdAt", "updatedAt"
+    FROM "AssetThumbnail"
+    WHERE "assetId" = ${assetId}
+    LIMIT 1
+  `;
+  return rows[0] ?? null;
+}
+
+async function getAssetThumbnailByAssetIdAndOwner(assetId: string, ownerId: string): Promise<AssetThumbnailRow | null> {
+  const rows = await prisma.$queryRaw<AssetThumbnailRow[]>`
+    SELECT t."id", t."assetId", t."storagePath", t."mimeType", t."size", t."createdAt", t."updatedAt"
+    FROM "AssetThumbnail" t
+    INNER JOIN "Asset" a ON a."id" = t."assetId"
+    WHERE t."assetId" = ${assetId} AND a."ownerId" = ${ownerId}
+    LIMIT 1
+  `;
+  return rows[0] ?? null;
+}
+
+async function upsertAssetThumbnail(assetId: string, storagePath: string, mimeType: string, size: number): Promise<void> {
+  const id = randomUUID();
+  await prisma.$executeRaw`
+    INSERT INTO "AssetThumbnail" ("id", "assetId", "storagePath", "mimeType", "size", "createdAt", "updatedAt")
+    VALUES (${id}, ${assetId}, ${storagePath}, ${mimeType}, ${size}, NOW(), NOW())
+    ON CONFLICT ("assetId")
+    DO UPDATE SET
+      "storagePath" = EXCLUDED."storagePath",
+      "mimeType" = EXCLUDED."mimeType",
+      "size" = EXCLUDED."size",
+      "updatedAt" = NOW()
+  `;
+}
 
 function pickNestedString(source: unknown, paths: string[]): string | undefined {
   if (!source || typeof source !== "object") {
@@ -640,6 +716,7 @@ async function handleUploadAsset(
     return res.status(201).json({
       id: asset.id,
       url: `/api/assets/${asset.id}/content`,
+      thumbnailUrl: null,
       name: asset.name,
       filename: asset.filename,
       mimeType: asset.mimeType,
@@ -678,11 +755,17 @@ assetRouter.get("/", async (req, res, next) => {
       },
       orderBy: [{ updatedAt: "desc" }, { filename: "asc" }],
     });
+    const privateAssetThumbPairs = await Promise.all(
+      privateAssets.map(async (asset) => [asset.id, await getAssetThumbnailByAssetId(asset.id)] as const),
+    );
+    const privateAssetThumbMap = new Map(privateAssetThumbPairs);
+
     res.json({
       privateAssets: privateAssets.map((asset) => ({
         ...asset,
         isPublic: false,
         url: `/api/assets/${asset.id}/content`,
+        thumbnailUrl: privateAssetThumbMap.get(asset.id) ? `/api/assets/${asset.id}/thumbnail` : null,
       })),
       publicAssets: publicAssets.map((asset) => toPublicAssetDto(asset)),
     });
@@ -852,7 +935,7 @@ assetRouter.get("/public/content", async (req, res, next) => {
       return res.status(400).json({ message: "fileName and key are required" });
     }
     const key = normalizeStorageKey(keyRaw);
-    const allowedKeys = new Set([publicModelStorageKey, publicImageStorageKey]);
+    const allowedKeys = new Set([publicModelStorageKey, publicImageStorageKey, publicThumbnailStorageKey]);
     if (!allowedKeys.has(key)) {
       return res.status(403).json({ message: "invalid public key" });
     }
@@ -879,6 +962,132 @@ assetRouter.get("/public/content", async (req, res, next) => {
   }
 });
 
+assetRouter.post("/:id/thumbnail", memoryUpload.single("thumbnail"), async (req, res, next) => {
+  try {
+    if (!req.currentUser) {
+      return res.status(401).json({ message: "unauthorized" });
+    }
+    const asset = await prisma.asset.findFirst({
+      where: { id: req.params.id, ownerId: req.currentUser.id },
+    });
+    if (!asset) {
+      return res.status(404).json({ message: "asset not found" });
+    }
+    if (!req.file) {
+      return res.status(400).json({ message: "thumbnail is required" });
+    }
+    if (!req.file.mimetype.startsWith("image/")) {
+      return res.status(400).json({ message: "thumbnail must be an image" });
+    }
+    const existing = await getAssetThumbnailByAssetId(asset.id);
+    const thumbnailFile: Express.Multer.File = {
+      ...req.file,
+      originalname: `${asset.id}.webp`,
+      mimetype: req.file.mimetype || "image/webp",
+    };
+    let storagePath: string;
+    if (remoteServiceUrl) {
+      const uploaded = await uploadToRemoteStorage(thumbnailFile, req.currentUser.id, [thumbnailStorageKey]);
+      storagePath = uploaded.storagePath;
+    } else {
+      const targetPath = resolveThumbnailPath(asset.id);
+      fs.writeFileSync(targetPath, req.file.buffer);
+      storagePath = `local:.thumbnails/${asset.id}.webp`;
+    }
+
+    if (existing && existing.storagePath !== storagePath) {
+      if (existing.storagePath.startsWith("local:")) {
+        const oldLocalPath = resolveLocalStoragePath(existing.storagePath);
+        if (oldLocalPath && fs.existsSync(oldLocalPath)) {
+          fs.unlinkSync(oldLocalPath);
+        }
+      } else {
+        const oldTarget = resolveRemoteDeleteTarget(existing.storagePath);
+        if (oldTarget) {
+          await deleteFromRemoteStorage(oldTarget.fileName, oldTarget.key).catch(() => null);
+        }
+      }
+    }
+
+    await upsertAssetThumbnail(
+      asset.id,
+      storagePath,
+      req.file.mimetype || "image/webp",
+      req.file.size,
+    );
+
+    return res.status(201).json({
+      id: asset.id,
+      thumbnailUrl: `/api/assets/${asset.id}/thumbnail`,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+assetRouter.get("/:id/thumbnail", async (req, res, next) => {
+  try {
+    if (!req.currentUser) {
+      return res.status(401).json({ message: "unauthorized" });
+    }
+    const thumbnail = await getAssetThumbnailByAssetIdAndOwner(req.params.id, req.currentUser.id);
+    if (!thumbnail) {
+      return res.status(404).json({ message: "asset not found" });
+    }
+    if (thumbnail.storagePath.startsWith("local:")) {
+      const targetPath = resolveLocalStoragePath(thumbnail.storagePath);
+      if (!targetPath || !fs.existsSync(targetPath)) {
+        return res.status(404).json({ message: "thumbnail not found" });
+      }
+      res.setHeader("Content-Type", thumbnail.mimeType || "image/webp");
+      return res.sendFile(targetPath);
+    }
+
+    const target = resolveRemoteDeleteTarget(thumbnail.storagePath);
+    if (!target) {
+      return res.status(404).json({ message: "thumbnail not found" });
+    }
+    const remote = await getFromRemoteStorage(target.fileName, target.key);
+    res.setHeader("Content-Type", remote.contentType || thumbnail.mimeType || "image/webp");
+    return res.status(200).send(Buffer.from(remote.bytes));
+  } catch (error) {
+    next(error);
+  }
+});
+
+assetRouter.put("/:id", async (req, res, next) => {
+  try {
+    if (!req.currentUser) {
+      return res.status(401).json({ message: "unauthorized" });
+    }
+    const current = await prisma.asset.findFirst({
+      where: { id: req.params.id, ownerId: req.currentUser.id },
+    });
+    if (!current) {
+      return res.status(404).json({ message: "asset not found" });
+    }
+    const rawName = typeof req.body?.name === "string" ? req.body.name : "";
+    const name = rawName.trim();
+    if (!name) {
+      return res.status(400).json({ message: "name is required" });
+    }
+
+    const updated = await prisma.asset.update({
+      where: { id: current.id },
+      data: { name: name.slice(0, 255) },
+    });
+    const thumbnail = await getAssetThumbnailByAssetId(updated.id);
+
+    return res.json({
+      ...updated,
+      url: `/api/assets/${updated.id}/content`,
+      thumbnailUrl: thumbnail ? `/api/assets/${updated.id}/thumbnail` : null,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 assetRouter.get("/:id", async (req, res, next) => {
   try {
     if (!req.currentUser) {
@@ -890,9 +1099,11 @@ assetRouter.get("/:id", async (req, res, next) => {
     if (!asset) {
       return res.status(404).json({ message: "asset not found" });
     }
+    const thumbnail = await getAssetThumbnailByAssetId(asset.id);
     res.json({
       ...asset,
       url: `/api/assets/${asset.id}/content`,
+      thumbnailUrl: thumbnail ? `/api/assets/${asset.id}/thumbnail` : null,
     });
   } catch (error) {
     next(error);
@@ -973,6 +1184,21 @@ assetRouter.delete("/:id", async (req, res, next) => {
       const absolutePath = path.resolve(uploadDir, asset.path);
       if (fs.existsSync(absolutePath)) {
         fs.unlinkSync(absolutePath);
+      }
+    }
+
+    const thumbnail = await getAssetThumbnailByAssetId(asset.id);
+    if (thumbnail?.storagePath) {
+      if (thumbnail.storagePath.startsWith("local:")) {
+        const thumbnailPath = resolveLocalStoragePath(thumbnail.storagePath);
+        if (thumbnailPath && fs.existsSync(thumbnailPath)) {
+          fs.unlinkSync(thumbnailPath);
+        }
+      } else {
+        const thumbnailTarget = resolveRemoteDeleteTarget(thumbnail.storagePath);
+        if (thumbnailTarget) {
+          await deleteFromRemoteStorage(thumbnailTarget.fileName, thumbnailTarget.key).catch(() => null);
+        }
       }
     }
 

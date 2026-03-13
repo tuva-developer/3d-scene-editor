@@ -2,14 +2,14 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCopy,
   faImage,
+  faPen,
   faTrash,
   faXmark,
   faCube,
 } from "@fortawesome/free-solid-svg-icons";
 import { useMemo, useState } from "react";
 import type { AssetDto } from "@/services/assetService";
-import MyModelPicker from "@/components/ui/MyModelPicker";
-import MyImagePicker from "@/components/ui/MyImagePicker";
+import MyAssetPicker from "@/components/ui/MyAssetPicker";
 
 type Props = {
   open: boolean;
@@ -22,6 +22,7 @@ type Props = {
   onRefresh: (kind: "MODEL" | "IMAGE") => void;
   onOpenUpload: (kind: "MODEL" | "IMAGE") => void;
   onDelete: (asset: AssetDto) => void;
+  onUpdate: (asset: AssetDto) => void;
   onCopyUrl: (asset: AssetDto) => void;
 };
 
@@ -42,6 +43,7 @@ export default function AssetLibraryModal({
   onRefresh,
   onOpenUpload,
   onDelete,
+  onUpdate,
   onCopyUrl,
 }: Props) {
   const [activeKind, setActiveKind] = useState<"MODEL" | "IMAGE">("MODEL");
@@ -62,7 +64,7 @@ export default function AssetLibraryModal({
         onClick={onClose}
         aria-hidden="true"
       />
-      <div className="relative z-[1] h-[min(94vh,860px)] w-[min(96vw,1080px)] overflow-y-auto rounded-xl border border-[var(--panel-border)] bg-[var(--panel-bg)] p-4 text-[var(--text)] shadow-[var(--panel-shadow)]">
+      <div className="relative z-[1] h-[min(94vh,860px)] w-[min(96vw,1080px)] overflow-hidden rounded-xl border border-[var(--panel-border)] bg-[var(--panel-bg)] p-4 text-[var(--text)] shadow-[var(--panel-shadow)]">
         <div className="mb-3 flex items-center justify-between">
           <div className="text-[14px] font-semibold uppercase tracking-[0.06em] text-[var(--text-muted)]">
             Asset Library
@@ -80,39 +82,33 @@ export default function AssetLibraryModal({
         <div className="mb-3 grid grid-cols-2 overflow-hidden rounded-lg border border-[var(--panel-border)] bg-[var(--btn-bg)]">
           <button
             type="button"
-            className={`group relative flex h-16 flex-col items-center justify-center gap-1 text-[12px] font-semibold uppercase tracking-[0.06em] transition ${
+            className={`group relative flex h-16 flex-col items-center justify-center gap-1 text-[12px] font-semibold uppercase transition ${
               activeKind === "MODEL"
-                ? "bg-[var(--btn-active-bg)] text-[var(--btn-active-text)] shadow-[inset_0_-2px_0_0_var(--btn-active-border)]"
+                ? "bg-[var(--btn-active-bg)] text-[var(--btn-active-text)]"
                 : "bg-transparent text-[var(--text-muted)] hover:bg-[var(--btn-hover)]"
             }`}
             onClick={() => setActiveKind("MODEL")}
           >
             <FontAwesomeIcon icon={faCube} className="text-[15px]" />
             <span>Models</span>
-            {activeKind === "MODEL" ? (
-              <span className="pointer-events-none absolute bottom-[-8px] h-2 w-4 rotate-45 border-r border-b border-[var(--panel-border)] bg-[var(--btn-active-bg)]" />
-            ) : null}
           </button>
           <button
             type="button"
-            className={`group relative flex h-16 flex-col items-center justify-center gap-1 border-l border-[var(--panel-border)] text-[12px] font-semibold uppercase tracking-[0.06em] transition ${
+            className={`group relative flex h-16 flex-col items-center justify-center gap-1 border-l border-[var(--panel-border)] text-[12px] font-semibold uppercase transition ${
               activeKind === "IMAGE"
-                ? "bg-[var(--btn-active-bg)] text-[var(--btn-active-text)] shadow-[inset_0_-2px_0_0_var(--btn-active-border)]"
+                ? "bg-[var(--btn-active-bg)] text-[var(--btn-active-text)]"
                 : "bg-transparent text-[var(--text-muted)] hover:bg-[var(--btn-hover)]"
             }`}
             onClick={() => setActiveKind("IMAGE")}
           >
             <FontAwesomeIcon icon={faImage} className="text-[15px]" />
             <span>Images</span>
-            {activeKind === "IMAGE" ? (
-              <span className="pointer-events-none absolute bottom-[-8px] h-2 w-4 rotate-45 border-r border-b border-[var(--panel-border)] bg-[var(--btn-active-bg)]" />
-            ) : null}
           </button>
         </div>
 
         <div className="rounded-lg border border-[var(--panel-border)] bg-[var(--panel-section-bg)] p-2">
           {activeKind === "MODEL" ? (
-            <MyModelPicker
+            <MyAssetPicker
               assets={assets}
               loading={loading}
               selectedIds={[]}
@@ -122,7 +118,7 @@ export default function AssetLibraryModal({
               title="Models"
               emptyText="No models found."
               readOnlyList
-              gridCols={3}
+              gridCols={6}
               listMaxHeightClass="max-h-[68vh]"
               searchPlaceholder="Search models..."
               renderItemSubtitle={(asset) =>
@@ -133,27 +129,40 @@ export default function AssetLibraryModal({
                   <button
                     type="button"
                     onClick={() => onCopyUrl(asset)}
-                    className="flex h-7 w-7 items-center justify-center rounded-md border border-[var(--btn-border)] bg-[var(--btn-bg)] text-[11px] text-[var(--text)] hover:border-[var(--btn-border-hover)] hover:bg-[var(--btn-hover)]"
+                    className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-[var(--btn-border)] bg-[var(--panel-bg)] text-[11px] text-[var(--text)] transition hover:border-[var(--btn-active-border)]"
                     title="Copy asset URL"
                     aria-label={`Copy URL for ${asset.filename}`}
                   >
                     <FontAwesomeIcon icon={faCopy} />
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => onDelete(asset)}
-                    disabled={deletingAssetId === asset.id || asset.isPublic}
-                    className="flex h-7 w-7 items-center justify-center rounded-md bg-red-500 text-[11px] text-white hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-60"
-                    title={asset.isPublic ? "Public asset cannot be deleted" : "Delete asset"}
-                    aria-label={`Delete asset ${asset.filename}`}
-                  >
-                    <FontAwesomeIcon icon={faTrash} />
-                  </button>
+                  {!asset.isPublic ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onUpdate(asset)}
+                        className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-[var(--btn-border)] bg-[var(--panel-bg)] text-[11px] text-[var(--text)] transition hover:border-[var(--btn-active-border)]"
+                        title="Edit asset name"
+                        aria-label={`Edit asset ${asset.filename}`}
+                      >
+                        <FontAwesomeIcon icon={faPen} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDelete(asset)}
+                        disabled={deletingAssetId === asset.id}
+                        className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-[var(--btn-danger-border)] bg-[var(--btn-danger-bg)] text-[11px] text-[var(--btn-danger-text)] transition hover:bg-[var(--btn-danger-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+                        title="Delete asset"
+                        aria-label={`Delete asset ${asset.filename}`}
+                      >
+                        <FontAwesomeIcon icon={faTrash} />
+                      </button>
+                    </>
+                  ) : null}
                 </>
               )}
             />
           ) : (
-            <MyImagePicker
+            <MyAssetPicker
               assets={assets}
               loading={loading}
               selectedIds={[]}
@@ -163,7 +172,7 @@ export default function AssetLibraryModal({
               title="Images"
               emptyText="No images found."
               readOnlyList
-              gridCols={3}
+              gridCols={6}
               listMaxHeightClass="max-h-[68vh]"
               searchPlaceholder="Search images..."
               renderItemSubtitle={(asset) =>
@@ -174,22 +183,35 @@ export default function AssetLibraryModal({
                   <button
                     type="button"
                     onClick={() => onCopyUrl(asset)}
-                    className="flex h-7 w-7 items-center justify-center rounded-md border border-[var(--btn-border)] bg-[var(--btn-bg)] text-[11px] text-[var(--text)] hover:border-[var(--btn-border-hover)] hover:bg-[var(--btn-hover)]"
+                    className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-[var(--btn-border)] bg-[var(--panel-bg)] text-[11px] text-[var(--text)] transition hover:border-[var(--btn-active-border)]"
                     title="Copy asset URL"
                     aria-label={`Copy URL for ${asset.filename}`}
                   >
                     <FontAwesomeIcon icon={faCopy} />
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => onDelete(asset)}
-                    disabled={deletingAssetId === asset.id || asset.isPublic}
-                    className="flex h-7 w-7 items-center justify-center rounded-md bg-red-500 text-[11px] text-white hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-60"
-                    title={asset.isPublic ? "Public asset cannot be deleted" : "Delete asset"}
-                    aria-label={`Delete asset ${asset.filename}`}
-                  >
-                    <FontAwesomeIcon icon={faTrash} />
-                  </button>
+                  {!asset.isPublic ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onUpdate(asset)}
+                        className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-[var(--btn-border)] bg-[var(--panel-bg)] text-[11px] text-[var(--text)] transition hover:border-[var(--btn-active-border)]"
+                        title="Edit asset name"
+                        aria-label={`Edit asset ${asset.filename}`}
+                      >
+                        <FontAwesomeIcon icon={faPen} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDelete(asset)}
+                        disabled={deletingAssetId === asset.id}
+                        className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-[var(--btn-danger-border)] bg-[var(--btn-danger-bg)] text-[11px] text-[var(--btn-danger-text)] transition hover:bg-[var(--btn-danger-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+                        title="Delete asset"
+                        aria-label={`Delete asset ${asset.filename}`}
+                      >
+                        <FontAwesomeIcon icon={faTrash} />
+                      </button>
+                    </>
+                  ) : null}
                 </>
               )}
             />

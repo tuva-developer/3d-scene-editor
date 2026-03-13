@@ -13,7 +13,8 @@ type Props = {
   submitting: boolean;
   onClose: () => void;
   onRefresh: () => void;
-  onConfirmSave: (name: string) => void;
+  onCreateScene: (name: string) => void;
+  onUpdateScene: (sceneId: string, name?: string) => void;
   onConfirmLoad: (sceneId: string) => void;
   onDeleteScene: (sceneId: string) => void;
 };
@@ -26,7 +27,8 @@ export default function SceneLibraryModal({
   submitting,
   onClose,
   onRefresh,
-  onConfirmSave,
+  onCreateScene,
+  onUpdateScene,
   onConfirmLoad,
   onDeleteScene,
 }: Props) {
@@ -37,13 +39,21 @@ export default function SceneLibraryModal({
     if (!open) {
       return;
     }
-    setSelectedSceneId(scenes[0]?.id ?? null);
-  }, [open, scenes]);
+    if (mode === "load") {
+      setSelectedSceneId(scenes[0]?.id ?? null);
+      return;
+    }
+    setSelectedSceneId(null);
+  }, [mode, open, scenes]);
 
   const normalizedName = name.trim().toLowerCase();
-  const overwriteTarget = useMemo(
+  const nameConflict = useMemo(
     () => scenes.find((scene) => scene.name.trim().toLowerCase() === normalizedName) ?? null,
     [normalizedName, scenes]
+  );
+  const selectedScene = useMemo(
+    () => scenes.find((scene) => scene.id === selectedSceneId) ?? null,
+    [scenes, selectedSceneId]
   );
 
   if (!open) {
@@ -51,7 +61,7 @@ export default function SceneLibraryModal({
   }
 
   const title = mode === "save" ? "Save Scene" : "Load Scene";
-  const submitLabel = submitting ? "Processing..." : mode === "save" ? "Save" : "Load";
+  const submitLabel = submitting ? "Processing..." : "Load";
 
   return (
     <div className="fixed inset-0 z-[3500] flex items-center justify-center">
@@ -83,9 +93,22 @@ export default function SceneLibraryModal({
               onChange={(event) => setName(event.target.value)}
               placeholder="Scene name"
             />
-            {overwriteTarget ? (
+            {nameConflict ? (
               <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-400">
-                Existing scene will be overwritten: <span className="font-semibold">{overwriteTarget.name}</span>
+                Scene name already exists: <span className="font-semibold">{nameConflict.name}</span>. Use update to
+                modify an existing scene.
+              </div>
+            ) : null}
+            {selectedScene ? (
+              <div className="rounded-md border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-[11px] text-sky-300">
+                Update target: <span className="font-semibold">{selectedScene.name}</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSceneId(null)}
+                  className="ml-2 underline hover:opacity-80"
+                >
+                  Clear
+                </button>
               </div>
             ) : null}
           </div>
@@ -157,26 +180,44 @@ export default function SceneLibraryModal({
           >
             Cancel
           </button>
-          <button
-            type="button"
-            disabled={
-              submitting ||
-              loading ||
-              (mode === "save" ? name.trim().length === 0 : !selectedSceneId)
-            }
-            onClick={() => {
-              if (mode === "save") {
-                onConfirmSave(name.trim());
-                return;
-              }
-              if (selectedSceneId) {
-                onConfirmLoad(selectedSceneId);
-              }
-            }}
-            className="h-9 rounded-md border border-[var(--btn-active-border)] bg-[var(--btn-active-bg)] px-3 text-[12px] font-semibold text-[var(--btn-active-text)] shadow-[var(--btn-active-ring)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {submitLabel}
-          </button>
+          {mode === "save" ? (
+            <>
+              <button
+                type="button"
+                disabled={submitting || loading || name.trim().length === 0}
+                onClick={() => onCreateScene(name.trim())}
+                className="h-9 rounded-md border border-[var(--btn-active-border)] bg-[var(--btn-active-bg)] px-3 text-[12px] font-semibold text-[var(--btn-active-text)] shadow-[var(--btn-active-ring)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {submitting ? "Processing..." : "Save New"}
+              </button>
+              <button
+                type="button"
+                disabled={submitting || loading || !selectedSceneId}
+                onClick={() => {
+                  if (!selectedSceneId) {
+                    return;
+                  }
+                  onUpdateScene(selectedSceneId, name.trim() || undefined);
+                }}
+                className="h-9 rounded-md border border-sky-500/40 bg-sky-500/15 px-3 text-[12px] font-semibold text-sky-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {submitting ? "Processing..." : "Update Selected"}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              disabled={submitting || loading || !selectedSceneId}
+              onClick={() => {
+                if (selectedSceneId) {
+                  onConfirmLoad(selectedSceneId);
+                }
+              }}
+              className="h-9 rounded-md border border-[var(--btn-active-border)] bg-[var(--btn-active-bg)] px-3 text-[12px] font-semibold text-[var(--btn-active-text)] shadow-[var(--btn-active-ring)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {submitLabel}
+            </button>
+          )}
         </div>
       </div>
     </div>

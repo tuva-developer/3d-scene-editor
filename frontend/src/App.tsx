@@ -21,6 +21,7 @@ import { DEFAULT_WATER_SETTINGS, type WaterSettings } from "@/components/map/wat
 import { sceneService, type SceneDto } from "@/services/sceneService";
 import { assetService, type AssetDto } from "@/services/assetService";
 import { apiRequest } from "@/services/apiClient";
+import { captureModelThumbnail } from "@/services/modelThumbnail";
 
 const NO_ACTIVE_LAYER_ID = "__no_active_layer__";
 
@@ -104,7 +105,20 @@ function App() {
   });
   const [showShadowTime, setShowShadowTime] = useState(true);
   const [weather, setWeather] = useState<"sun" | "rain" | "snow">("sun");
-  const [daylight, setDaylight] = useState<"morning" | "noon" | "evening" | "night">("noon");
+  const [daylight, setDaylight] = useState<"morning" | "noon" | "evening" | "night">(() => {
+    const now = new Date();
+    const minutes = now.getHours() * 60 + now.getMinutes();
+    if (minutes >= 5 * 60 && minutes < 11 * 60) {
+      return "morning";
+    }
+    if (minutes >= 11 * 60 && minutes < 15 * 60) {
+      return "noon";
+    }
+    if (minutes >= 15 * 60 && minutes < 19 * 60 + 30) {
+      return "evening";
+    }
+    return "night";
+  });
   const [rainDensity, setRainDensity] = useState(1.4);
   const [snowDensity, setSnowDensity] = useState(1.3);
   const [transformValues, setTransformValues] = useState<TransformValues | null>(null);
@@ -235,6 +249,11 @@ function App() {
     }
     return "night";
   };
+  const currentSunTime = useMemo(() => {
+    const next = new Date(sunDate);
+    next.setHours(Math.floor(sunMinutes / 60), sunMinutes % 60, 0, 0);
+    return next;
+  }, [sunDate, sunMinutes]);
 
   const revokeInstanceBlobUrls = (layerId?: string) => {
     if (layerId) {
@@ -378,7 +397,13 @@ function App() {
     setModelLibraryUploading(true);
     try {
       const key = assetUploadKind === "IMAGE" ? "/images" : "/models";
-      await assetService.upload(file, key, name);
+      const uploaded = await assetService.upload(file, key, name);
+      if (assetUploadKind === "MODEL") {
+        const thumbnailBlob = await captureModelThumbnail(file);
+        if (thumbnailBlob) {
+          await assetService.uploadThumbnail(uploaded.id, thumbnailBlob);
+        }
+      }
       if (assetUploadKind === "IMAGE") {
         await loadImageLibraryAssets();
       } else {
@@ -412,6 +437,37 @@ function App() {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to delete asset.";
+      window.alert(message);
+    } finally {
+      setModelLibraryDeletingId(null);
+    }
+  };
+
+  const handleUpdateModelAsset = async (asset: AssetDto) => {
+    if (asset.isPublic || asset.ownerId === "public") {
+      window.alert("Public asset cannot be edited.");
+      return;
+    }
+    const currentName = (asset.name || asset.filename || "").trim();
+    const nextName = window.prompt("Update asset name", currentName);
+    if (nextName === null) {
+      return;
+    }
+    const trimmed = nextName.trim();
+    if (!trimmed) {
+      window.alert("Asset name is required.");
+      return;
+    }
+    setModelLibraryDeletingId(asset.id);
+    try {
+      await assetService.update(asset.id, { name: trimmed });
+      if (asset.kind === "IMAGE") {
+        await loadImageLibraryAssets();
+      } else {
+        await loadModelLibraryAssets();
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update asset.";
       window.alert(message);
     } finally {
       setModelLibraryDeletingId(null);
@@ -1102,7 +1158,7 @@ function App() {
     await loadScenesForModal();
   };
 
-  const handleConfirmSaveScene = async (sceneName: string) => {
+  const handleCreateScene = async (sceneName: string) => {
     const payload = buildSceneSnapshot();
     if (!payload) {
       window.alert("Map is not ready yet.");
@@ -1112,14 +1168,41 @@ function App() {
     try {
       const existed = sceneModalScenes.find((scene) => scene.name.toLowerCase() === sceneName.toLowerCase()) ?? null;
       if (existed) {
-        await sceneService.update(existed.id, { name: sceneName, configJson: payload });
-      } else {
-        await sceneService.create({ name: sceneName, configJson: payload });
+        window.alert(`Scene "${sceneName}" already exists. Select it and use update.`);
+        return;
       }
+      await sceneService.create({ name: sceneName, configJson: payload });
       await loadScenesForModal();
       setSceneModalOpen(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to save scene.";
+      window.alert(message);
+    } finally {
+      setSceneModalSubmitting(false);
+    }
+  };
+
+  const handleUpdateScene = async (sceneId: string, sceneName?: string) => {
+    const payload = buildSceneSnapshot();
+    if (!payload) {
+      window.alert("Map is not ready yet.");
+      return;
+    }
+    setSceneModalSubmitting(true);
+    try {
+      const target = sceneModalScenes.find((scene) => scene.id === sceneId) ?? null;
+      if (!target) {
+        window.alert("Scene not found.");
+        return;
+      }
+      await sceneService.update(sceneId, {
+        name: sceneName?.trim() || target.name,
+        configJson: payload,
+      });
+      await loadScenesForModal();
+      setSceneModalOpen(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update scene.";
       window.alert(message);
     } finally {
       setSceneModalSubmitting(false);
@@ -1173,6 +1256,7 @@ function App() {
         center={mapCenter}
         zoom={16}
         styleUrl={styleUrl}
+          sunTime={currentSunTime}
           activeLayerId={activeLayerId}
           ref={mapHandleRef}
           showTileBoundaries={showTiles}
@@ -1327,7 +1411,8 @@ function App() {
         submitting={sceneModalSubmitting}
         onClose={() => setSceneModalOpen(false)}
         onRefresh={loadScenesForModal}
-        onConfirmSave={handleConfirmSaveScene}
+        onCreateScene={handleCreateScene}
+        onUpdateScene={handleUpdateScene}
         onConfirmLoad={handleConfirmLoadScene}
         onDeleteScene={handleDeleteScene}
       />
@@ -1351,6 +1436,7 @@ function App() {
           setUploadModelModalOpen(true);
         }}
         onDelete={handleDeleteModelAsset}
+        onUpdate={handleUpdateModelAsset}
         onCopyUrl={handleCopyModelUrl}
       />
       <UploadModelModal
